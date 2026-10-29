@@ -11,3 +11,5 @@ dist/
 backups/
 *.json.gz
 n8n workflow/
+*.zip
+*.jpeg
