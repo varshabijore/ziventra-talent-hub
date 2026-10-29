@@ -1,0 +1,5 @@
+starlette>=0.41
+uvicorn[standard]>=0.32
+pymongo>=4.13
+PyJWT>=2.10
+pydantic>=2.12
