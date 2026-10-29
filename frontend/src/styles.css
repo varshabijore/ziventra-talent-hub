@@ -524,3 +524,19 @@ nav.side .lbl{display:inline !important}
 nav.side .nav{width:auto;gap:12px;justify-content:flex-start}
 nav.side .nav:hover::after{display:none}
 .shell.closed nav.side .nav:hover::after{display:block}
+
+/* ===== phone fix (must stay LAST): one column, top header, no side panel ===== */
+@media (max-width:760px){
+  .shell,.shell.closed{display:block !important;grid-template-columns:none !important}
+  nav.side,.shell.closed nav.side{display:none !important}
+  .mhead{display:flex !important;width:100%}
+  main,.shell.closed main{padding:16px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px)) !important;min-width:0}
+  .deskmenu{display:none !important}
+  .dash{height:auto !important}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px}
+  .kpi{padding:12px}
+  .kpi .ic{display:none}
+  .grid2,.grid3,.dgrid,.cprofile,.cgrid{grid-template-columns:minmax(0,1fr) !important}
+  .span2{grid-column:auto !important}
+  .top h1{font-size:22px}
+}
