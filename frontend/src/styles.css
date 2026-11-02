@@ -562,3 +562,29 @@ nav.side .nav:hover::after{display:none}
 .kpis{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 @media (max-width:1100px){.jobs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:760px){.jobs{grid-template-columns:minmax(0,1fr) !important}.runtbl th:nth-child(4),.runtbl td:nth-child(4),.runtbl th:nth-child(7),.runtbl td:nth-child(7){display:none}}
+
+/* automation v2: date range + readable job cards */
+.drange{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.drange .f{flex-direction:row;align-items:center;gap:6px;font-size:13px}
+.drange input{width:auto;padding:7px 10px}
+.jobs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.jcard2{margin:0;display:flex;flex-direction:column;gap:12px;border-top:4px solid var(--line)}
+.jcard2.good{border-top-color:var(--good)} .jcard2.warn{border-top-color:var(--warn)} .jcard2.bad{border-top-color:var(--bad)}
+.jhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.jhead h3{margin:0;font-size:17px}
+.jhead p{margin:2px 0 0;font-size:12.5px;color:var(--muted);line-height:1.4}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.pill .pdot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.good{background:var(--good-soft,rgba(22,163,74,.1));color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft,rgba(220,38,38,.12));color:var(--bad)}
+.pill.mute{background:var(--soft);color:var(--muted)}
+.jlast{margin:0;font-size:14px;line-height:1.5}
+.jwarn{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:500;display:flex;flex-direction:column;gap:3px}
+.jstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.jstats>div{background:var(--soft);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:1px}
+.jstats b{font-size:18px}
+.jstats small{font-size:12px;color:var(--muted);font-weight:500}
+.jstats span{font-size:11.5px;color:var(--muted)}
+.jfoot{font-size:12.5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px;margin-top:auto}
+@media (max-width:1100px){.jobs{grid-template-columns:minmax(0,1fr)}}

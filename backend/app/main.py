@@ -250,14 +250,17 @@ async def candidate(request):
 
 async def automation_page(request):
     current_user(request)
-    try:
-        days = min(max(int(request.query_params.get("days") or 7), 1), 60)
-    except ValueError:
-        days = 7
+    today = dt.datetime.now(automation.IST).date()
+    def day(key, default):
+        v = request.query_params.get(key) or ""
+        return v if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) else default.isoformat()
+    start, end = day("from", today), day("to", today)
+    if (dt.date.fromisoformat(end) - dt.date.fromisoformat(start)).days > 90:
+        return err(400, "Choose at most 90 days")
     def build():
-        since = (dt.datetime.now(automation.IST).date() - dt.timedelta(days=days - 1)).isoformat()
         st = S["store"]
-        return automation.report(st.runs_since(since), st.errors_since(since), days)
+        lo = min(start, end, (today - dt.timedelta(days=7)).isoformat())
+        return automation.report(st.runs_since(lo), st.errors_since(lo), start, end)
     return ok(await run_in_threadpool(build))
 
 

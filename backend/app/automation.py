@@ -137,80 +137,86 @@ def _next_run(job, now):
     return ""
 
 
-def report(runs_raw, errors_raw, days=7):
+SHOWN_JOBS = ["Scraping", "Enrichment", "Refresh"]  # Sync is hidden until it writes a run log
+
+
+def report(runs_raw, errors_raw, start, end):
+    """Everything the Automation page shows for the days start..end (YYYY-MM-DD, IST)."""
     now = _now()
     today = now.date().isoformat()
-    since = (now.date() - dt.timedelta(days=days - 1)).isoformat()
-    runs = sorted((parse(x) for x in runs_raw), key=lambda r: r["run_at"], reverse=True)
-    runs = [r for r in runs if r["date"] >= since]
-    logged_jobs = {r["job"] for r in runs}
+    d0, d1 = dt.date.fromisoformat(start), dt.date.fromisoformat(end)
+    if d1 < d0:
+        d0, d1 = d1, d0
+    start, end = d0.isoformat(), d1.isoformat()
+    ndays = (d1 - d0).days + 1
+    allruns = sorted((parse(x) for x in runs_raw), key=lambda r: r["run_at"], reverse=True)
+    runs = [r for r in allruns if start <= r["date"] <= end and r["job"] in SHOWN_JOBS]
 
     errors = []
     for e in errors_raw:
         at = str(e.get("at") or "")
-        if at[:10] >= since:
+        if start <= at[:10] <= end:
             errors.append({"at": at[:16].replace("T", " "), "workflow": e.get("workflow", ""), "node": e.get("node", ""),
                            "message": str(e.get("message", ""))[:300], "url": e.get("url", "")})
     errors.sort(key=lambda e: e["at"], reverse=True)
 
-    # missed runs: a scheduled time today that passed 45+ min ago with no run of that job near it
+    # missed runs (only checked for today): a scheduled time that passed 45+ min ago with no run near it
     missed = []
-    for job in JOBS:
-        if job not in logged_jobs:
-            continue
-        for t in SCHEDULE[job]:
-            h, m = map(int, t.split(":"))
-            at = now.replace(hour=h, minute=m, second=0, microsecond=0)
-            if at + dt.timedelta(minutes=45) > now:
+    logged_jobs = {r["job"] for r in allruns}
+    if start <= today <= end:
+        for job in SHOWN_JOBS:
+            if job not in logged_jobs:
                 continue
-            near = [r for r in runs if r["job"] == job and r["date"] == today and
-                    abs((dt.datetime.strptime(r["run_at"], "%Y-%m-%d %H:%M").replace(tzinfo=IST) - at).total_seconds()) <= 75 * 60]
-            if not near:
-                missed.append({"job": job, "time": t, "date": today})
+            for t in SCHEDULE[job]:
+                h, m = map(int, t.split(":"))
+                at = now.replace(hour=h, minute=m, second=0, microsecond=0)
+                if at + dt.timedelta(minutes=45) > now:
+                    continue
+                near = [r for r in allruns if r["job"] == job and r["date"] == today and
+                        abs((dt.datetime.strptime(r["run_at"], "%Y-%m-%d %H:%M").replace(tzinfo=IST) - at).total_seconds()) <= 75 * 60]
+                if not near:
+                    missed.append({"job": job, "time": t, "date": today})
 
     jobs = []
-    for job in JOBS:
+    for job in SHOWN_JOBS:
         mine = [r for r in runs if r["job"] == job]
-        last = mine[0] if mine else None
+        ever = [r for r in allruns if r["job"] == job]
+        last = ever[0] if ever else None
         ok = sum(1 for r in mine if r["status"] == "ok")
         jobs.append({
             "job": job, "what": WHAT[job], "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
-            "logged": bool(mine), "runs": len(mine), "ok": ok,
+            "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
             "health": round(100 * ok / len(mine)) if mine else None,
-            "last": {k: last[k] for k in ("run_at", "status", "result", "issues")} if last else None,
-            "runs_today": sum(1 for r in mine if r["date"] == today),
-            "expected_today": len(SCHEDULE[job]),
-            "output": sum(r["new"] if job == "Scraping" else r["enriched"] if job == "Enrichment"
-                          else r["checked"] if job == "Refresh" else r["synced"] for r in mine),
+            "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai",
+                                           "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost")} if last else None,
+            "output": sum(r["new"] if job == "Scraping" else r["enriched"] if job == "Enrichment" else r["checked"] for r in mine),
             "cost": round(sum(r["cost"] for r in mine), 3),
+            "warnings": sum(1 for r in mine if r["status"] != "ok"),
         })
 
-    span = [(now.date() - dt.timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+    span = [(d0 + dt.timedelta(days=i)).isoformat() for i in range(ndays)]
     series = []
     for d in span:
         rs = [r for r in runs if r["date"] == d]
-        found = sum(r["found"] for r in rs if r["job"] == "Scraping")
         series.append({"date": d, "runs": len(rs), "new": sum(r["new"] for r in rs), "enriched": sum(r["enriched"] for r in rs),
                        "checked": sum(r["checked"] for r in rs), "cost": round(sum(r["cost"] for r in rs), 3),
-                       "issues": sum(1 for r in rs if r["status"] != "ok"),
-                       "dup_rate": round(100 * sum(r["duplicates"] for r in rs) / found) if found else 0})
-    t = [r for r in runs if r["date"] == today]
+                       "issues": sum(1 for r in rs if r["status"] != "ok")})
     scr = [r for r in runs if r["job"] == "Scraping"]
     found_all = sum(r["found"] for r in scr)
     reasons = {}
     for r in scr:
         for k, v in r["reasons"].items():
             reasons[k] = reasons.get(k, 0) + v
-    issues = [{"run_at": r["run_at"], "job": r["job"], "status": r["status"], "issues": r["issues"]} for r in runs if r["issues"]][:40]
+    issues = [{"run_at": r["run_at"], "job": r["job"], "status": r["status"], "issues": r["issues"]} for r in runs if r["issues"]][:60]
     return {
-        "now": now.strftime("%Y-%m-%d %H:%M"), "days": days,
-        "today": {"runs": len(t), "new": sum(r["new"] for r in t), "enriched": sum(r["enriched"] for r in t),
-                  "checked": sum(r["checked"] for r in t), "cost": round(sum(r["cost"] for r in t), 3),
-                  "issues": sum(1 for r in t if r["status"] != "ok") + len([m for m in missed]) + sum(1 for e in errors if e["at"][:10] == today)},
-        "window": {"runs": len(runs), "new": sum(r["new"] for r in runs), "enriched": sum(r["enriched"] for r in runs),
+        "now": now.strftime("%Y-%m-%d %H:%M"), "start": start, "end": end, "days": ndays, "today": today,
+        "totals": {"runs": len(runs), "new": sum(r["new"] for r in runs), "new_sn": sum(r["new_sn"] for r in runs),
+                   "new_ai": sum(r["new_ai"] for r in runs), "enriched": sum(r["enriched"] for r in runs),
+                   "checked": sum(r["checked"] for r in runs), "changed": sum(r["changed"] for r in runs),
                    "cost": round(sum(r["cost"] for r in runs), 2),
+                   "issues": sum(1 for r in runs if r["status"] != "ok") + len(missed) + len(errors),
                    "dup_rate": round(100 * sum(r["duplicates"] for r in scr) / found_all) if found_all else 0,
                    "emails_valid": sum(r["emails_valid"] for r in runs), "emails_risky": sum(r["emails_risky"] for r in runs),
                    "scrape_failed": sum(r["scrape_failed"] for r in runs), "reasons": reasons},
-        "jobs": jobs, "series": series, "runs": runs[:200], "issues": issues, "missed": missed, "errors": errors[:50],
+        "jobs": jobs, "series": series, "runs": runs[:300], "issues": issues, "missed": missed, "errors": errors[:50],
     }

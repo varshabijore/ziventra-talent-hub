@@ -1,44 +1,63 @@
 import { useMemo, useState } from "react";
 import { BarChart, ErrorBox, HBars, Icon, Kpi, Loading, fmt, useSmall } from "../components/ui.jsx";
+import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Sync: "c-ai" };
+const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+const nice = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const ST = { ok: ["c-good", "OK"], warning: ["c-warn", "Check"], error: ["c-bad", "Failed"] };
 const REASON = { duplicate: "Already in database", not_india: "Outside India", wrong_title: "Wrong title", recruiter: "Recruiter / HR", no_name: "No real name" };
 const short = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 const day = (iso) => { const t = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); return iso === t ? "Today" : short(iso); };
 const money = (n) => "$" + Number(n || 0).toFixed(2);
 
-function JobCard({ j }) {
-  const last = j.last;
-  const st = last ? ST[last.status] || ST.ok : null;
+const HEALTH = { ok: ["good", "Working fine"], warning: ["warn", "Needs attention"], error: ["bad", "Failed"] };
+
+function lastLine(j) {
+  const l = j.last;
+  const when = `${day(l.date)}, ${l.time}`;
+  if (j.job === "Scraping") return <>Last ran <b>{when}</b> and added <b>{l.new} new candidates</b> ({l.new_sn} ServiceNow, {l.new_ai} AI/ML).</>;
+  if (j.job === "Enrichment") return <>Last ran <b>{when}</b> and enriched <b>{l.enriched} profiles</b>{l.emails_valid ? <>, {l.emails_valid} with a valid email</> : null}.</>;
+  if (j.job === "Refresh") return <>Last ran <b>{when}</b> and re-checked <b>{l.checked} profiles</b>; {l.changed} had LinkedIn changes.</>;
+  return <>Last ran <b>{when}</b>: {l.result}.</>;
+}
+
+function JobCard({ j, single }) {
+  const l = j.last;
+  const [cls, label] = !j.logged ? ["mute", "Not connected yet"] : HEALTH[l.status] || HEALTH.ok;
+  const nextToday = j.next_run && j.next_run.slice(0, 10) === istToday();
   return (
-    <div className="panel jcard">
-      <div className="jtop">
-        <span className={"chip " + JOB_TONE[j.job]}>{j.job}</span>
-        {st ? <span className={"chip " + st[0]}>{st[1]}</span> : <span className="chip c-mute">No log</span>}
+    <div className={"panel jcard2 " + cls}>
+      <div className="jhead">
+        <div><h3>{j.job}</h3><p>{j.what}</p></div>
+        <span className={"pill " + cls}><span className="pdot" />{label}</span>
       </div>
-      <p className="small muted jwhat">{j.what}</p>
       {j.logged ? (
         <>
-          <div className="jline"><span>Last run</span><b>{last.run_at.slice(5)}</b></div>
-          <div className="jline"><span>Result</span><b>{last.result}</b></div>
-          <div className="jline"><span>Runs today</span><b>{j.runs_today} / {j.expected_today}</b></div>
-          <div className="jline"><span>Healthy runs</span><b>{j.health}%</b></div>
+          <p className="jlast">{lastLine(j)}</p>
+          {l.issues.length > 0 && <div className="jwarn">{l.issues.map((x, k) => <div key={k}>⚠ {x}</div>)}</div>}
+          <div className="jstats">
+            <div><b>{j.runs}<small> / {j.expected}</small></b><span>runs {single ? "that day" : "in these days"}</span></div>
+            <div><b>{fmt(j.output)}</b><span>{j.job === "Scraping" ? "new candidates" : j.job === "Enrichment" ? "profiles enriched" : "profiles checked"}</span></div>
+            <div><b>{money(j.cost)}</b><span>Apify cost</span></div>
+          </div>
         </>
       ) : (
-        <div className="msg small">No run log yet. Add the "Mongo run log" node to this n8n workflow and its runs will show here.</div>
+        <p className="jlast muted">This workflow does not save its runs to the database yet. Add the "Mongo run log" node in n8n and its runs will appear here.</p>
       )}
-      <div className="jline"><span>Next run</span><b>{j.next_run ? j.next_run.slice(11) + (j.next_run.slice(0, 10) !== new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10) ? " (tomorrow)" : "") : "-"}</b></div>
-      <div className="small muted">Schedule: {j.schedule.join(" · ")}</div>
+      <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
+        <span className="muted"> · runs daily at {j.schedule.join(", ")}</span></div>
     </div>
   );
 }
 
 export default function Automation({ query }) {
-  const days = Number(query.get("days")) || 7;
-  const { data: d, error, loading, reload } = useCached(`/automation?days=${days}`, { keep: true });
+  const from = query.get("from") || istToday();
+  const to = query.get("to") || from;
+  const { data: d, error, loading, reload } = useCached("/automation" + qs({ from, to }), { keep: true });
+  const setRange = (f, t) => go("/automation" + qs({ from: f, to: t < f ? f : t }));
   const [job, setJob] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [all, setAll] = useState(false);
@@ -47,7 +66,8 @@ export default function Automation({ query }) {
   const runs = useMemo(() => (d?.runs || []).filter((r) => (!job || r.job === job) && (!onlyIssues || r.status !== "ok")), [d, job, onlyIssues]);
   if (loading && !d) return <Loading />;
   if (error) return <ErrorBox error={error} retry={reload} />;
-  const t = d.today, w = d.window;
+  const w = d.totals, single = d.start === d.end;
+  const range = single ? (d.start === d.today ? "today" : nice(d.start)) : `${nice(d.start)} – ${nice(d.end)}`;
   const shown = small && !all ? runs.slice(0, 5) : runs;
   const issueCount = d.errors.length + d.missed.length + d.issues.length;
   const reasons = Object.entries(w.reasons || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: REASON[k] || k, value: v }));
@@ -55,23 +75,25 @@ export default function Automation({ query }) {
   return (
     <>
       <div className="top">
-        <div><h1>Automation</h1><p>n8n workflows: when they ran, what they brought in, and what went wrong · updated {d.now.slice(11)}</p></div>
-        <div className="seg" role="group" aria-label="Period">
-          {[1, 7, 14, 30].map((n) => <button key={n} type="button" aria-pressed={days === n} onClick={() => go(`/automation?days=${n}`)}>{n === 1 ? "Today" : `${n} days`}</button>)}
+        <div><h1>Automation</h1><p>What the n8n workflows did {single ? "on" : "from"} <b>{range}</b> · updated {d.now.slice(11)}</p></div>
+        <div className="drange">
+          <label className="f">From<input type="date" value={from} max={istToday()} onChange={(e) => e.target.value && setRange(e.target.value, to < e.target.value ? e.target.value : to)} /></label>
+          <label className="f">To<input type="date" value={to} min={from} max={istToday()} onChange={(e) => e.target.value && setRange(from, e.target.value)} /></label>
+          {(from !== istToday() || to !== istToday()) && <button type="button" className="btn ghost sm" onClick={() => setRange(istToday(), istToday())}>Today</button>}
         </div>
       </div>
 
       <section className="kpis">
-        <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs today" value={fmt(t.runs)} sub={`${fmt(w.runs)} in ${days === 1 ? "today" : days + " days"}`} />
-        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped today (new)" value={fmt(t.new)} sub={`${fmt(w.new)} in period · ${w.dup_rate}% duplicates`} />
-        <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Enriched today" value={fmt(t.enriched)} sub={`${fmt(w.enriched)} in period · ${w.emails_valid} valid emails`} />
-        <Kpi icon="refresh" bg="var(--info-soft)" fg="var(--info)" label="Refreshed today" value={fmt(t.checked)} sub="profiles re-checked" />
-        <Kpi icon="star" bg="var(--warn-soft)" fg="var(--warn)" label="Apify cost today" value={money(t.cost)} sub={`${money(w.cost)} in period`} />
-        <Kpi icon="x" bg={t.issues ? "var(--bad-soft, rgba(220,38,38,.12))" : "var(--good-soft, rgba(22,163,74,.1))"} fg={t.issues ? "var(--bad)" : "var(--good)"}
-          label="Issues today" value={fmt(t.issues)} sub={t.issues ? "see the Issues list" : "everything ran fine"} />
+        <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs" value={fmt(w.runs)} sub={single ? "workflow runs that day" : `in ${d.days} days`} />
+        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={`${w.new_sn} ServiceNow · ${w.new_ai} AI/ML`} />
+        <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Enriched" value={fmt(w.enriched)} sub={`${w.emails_valid} with a valid email`} />
+        <Kpi icon="refresh" bg="var(--info-soft)" fg="var(--info)" label="Refreshed" value={fmt(w.checked)} sub={`${w.changed} LinkedIn changes`} />
+        <Kpi icon="star" bg="var(--warn-soft)" fg="var(--warn)" label="Apify cost" value={money(w.cost)} sub={`${w.dup_rate}% of scraped results were duplicates`} />
+        <Kpi icon="x" bg={w.issues ? "var(--bad-soft, rgba(220,38,38,.12))" : "var(--good-soft, rgba(22,163,74,.1))"} fg={w.issues ? "var(--bad)" : "var(--good)"}
+          label="Issues" value={fmt(w.issues)} sub={w.issues ? "see the Issues list" : "everything ran fine"} />
       </section>
 
-      <section className="jobs">{d.jobs.map((j) => <JobCard key={j.job} j={j} />)}</section>
+      <section className="jobs">{d.jobs.map((j) => <JobCard key={j.job} j={j} single={single} />)}</section>
 
       <div className="dgrid">
         <section className="panel">
@@ -79,7 +101,7 @@ export default function Automation({ query }) {
             <div><h2>Run log</h2><p className="sub" style={{ margin: 0 }}>Every n8n run, newest first</p></div>
             <div className="ltools">
               <div className="seg" role="group" aria-label="Job">
-                {["", "Scraping", "Enrichment", "Refresh", "Sync"].map((k) => <button key={k || "all"} type="button" aria-pressed={job === k} onClick={() => setJob(k)}>{k || "All"}</button>)}
+                {["", "Scraping", "Enrichment", "Refresh"].map((k) => <button key={k || "all"} type="button" aria-pressed={job === k} onClick={() => setJob(k)}>{k || "All"}</button>)}
               </div>
               <label className="chk"><input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} /> Only issues</label>
             </div>
@@ -106,7 +128,7 @@ export default function Automation({ query }) {
         </section>
 
         <div className="stack">
-          <section className="panel"><h2>Issues</h2><p className="sub">{issueCount ? `${issueCount} in this period` : "Nothing went wrong in this period"}</p>
+          <section className="panel"><h2>Issues</h2><p className="sub">{issueCount ? `${issueCount} on the selected days` : "Nothing went wrong on the selected days"}</p>
             <div className="scroll" style={{ "--h": "260px" }}>
               {d.errors.map((e, i) => (
                 <div key={"e" + i} className="issrow bad"><Icon name="x" size={14} /><div><b>Workflow failed · {e.workflow}</b>
@@ -120,9 +142,9 @@ export default function Automation({ query }) {
             </div>
           </section>
           <section className="panel"><h2>Per day</h2><p className="sub">New candidates and enriched profiles</p>
-            <BarChart rows={d.series.map((r) => ({ ...r, label: short(r.date) }))} width={520} height={140} every={days > 14 ? 5 : days > 7 ? 2 : 1}
+            <BarChart rows={d.series.map((r) => ({ ...r, label: short(r.date) }))} width={520} height={140} every={d.days > 14 ? 5 : d.days > 7 ? 2 : 1}
               series={[{ key: "new", name: "Scraped (new)", color: "var(--brand)" }, { key: "enriched", name: "Enriched", color: "var(--sn)" }]} /></section>
-          <section className="panel"><h2>Why profiles were skipped</h2><p className="sub">Scraping results not added in this period</p>
+          <section className="panel"><h2>Why profiles were skipped</h2><p className="sub">Scraping results that were not added</p>
             {reasons.length ? <HBars items={reasons} color="var(--warn)" /> : <div className="small muted">No data</div>}</section>
         </div>
       </div>
