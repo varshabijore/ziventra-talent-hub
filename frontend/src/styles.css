@@ -805,3 +805,7 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 [data-theme="dark"] .cline.ic-cert .cic2{background:rgba(245,158,11,.18);color:#fbbf24}
 .cline.none .cic2{background:var(--bg,#f4f5fa);color:var(--muted);opacity:.7}
 .clines{gap:7px}
+/* no company: orange briefcase */
+.clogo.nocomp{background:#fff7ed;border:1px solid #fed7aa;color:#ea580c}
+.clogo.nocomp svg{width:55%;height:55%;opacity:1;stroke-width:2}
+[data-theme="dark"] .clogo.nocomp{background:rgba(234,88,12,.16);border-color:rgba(251,146,60,.35);color:#fb923c}
