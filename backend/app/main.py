@@ -207,6 +207,17 @@ async def daily(request):
 
 
 async def candidates(request):
+    if request.method == "POST":                     # add one candidate by hand
+        u = current_user(request, "recruiter")
+        try:
+            data = await request.json() or {}
+        except Exception:
+            raise HTTPException(400, "Send JSON")
+        r = await run_in_threadpool(S["cand"].create, str(data.get("pool") or ""), dict(data.get("fields") or {}), u)
+        if r.get("error"):
+            return err(409 if r["error"] == "duplicate" else 400, r.get("message") or "Could not add", **({"id": r["id"]} if r.get("id") else {}))
+        log(request, u, "candidate_add", r["id"])
+        return ok(r, 201)
     u = current_user(request)
     c, p = S["cand"], dict(request.query_params)
     return ok(await run_in_threadpool(lambda: c.memo("search", p, lambda: c.search(p, u["id"]))))
@@ -275,8 +286,28 @@ async def import_template(request):
                     headers={"Content-Disposition": 'attachment; filename="candidates-import-template.csv"'})
 
 
+async def delete_candidates(request):
+    """POST {ids: [...]} - delete several (from the list selection)."""
+    u = current_user(request, "recruiter")
+    try:
+        data = await request.json() or {}
+    except Exception:
+        raise HTTPException(400, "Send JSON")
+    ids = [str(x) for x in (data.get("ids") or [])][:5000]
+    r = await run_in_threadpool(S["cand"].delete, ids, u)
+    log(request, u, "candidate_delete", f"{r['deleted']} deleted")
+    return ok(r)
+
+
 async def candidate(request):
     cid = request.path_params["cid"]
+    if request.method == "DELETE":
+        u = current_user(request, "recruiter")
+        r = await run_in_threadpool(S["cand"].delete, [cid], u)
+        if not r["deleted"]:
+            return err(404, "Candidate not found")
+        log(request, u, "candidate_delete", cid)
+        return ok(r)
     if request.method == "PATCH":
         u = current_user(request, "recruiter")
         b = await body(request, Edit)
@@ -370,11 +401,12 @@ routes = [
     Route("/api/daily", daily),
     Route("/api/automation", automation_page),
     Route("/api/contacts", contacts_page),
-    Route("/api/candidates", candidates),
+    Route("/api/candidates", candidates, methods=["GET", "POST"]),
+    Route("/api/candidates/delete", delete_candidates, methods=["POST"]),
     Route("/api/candidates/export", export, methods=["GET", "POST"]),
     Route("/api/candidates/import", import_candidates, methods=["POST"]),
     Route("/api/candidates/import/template", import_template),
-    Route("/api/candidates/{cid}", candidate, methods=["GET", "PATCH"]),
+    Route("/api/candidates/{cid}", candidate, methods=["GET", "PATCH", "DELETE"]),
 ]
 
 app = Starlette(routes=routes, lifespan=lifespan,

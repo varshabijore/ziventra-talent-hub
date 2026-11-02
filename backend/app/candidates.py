@@ -43,14 +43,21 @@ class Candidates:
         self._views = None       # (ver, list of views)
         self._memo = {}          # (name, ver, params) -> result
         self._fields = (0.0, None)
+        self._gone = {}          # linkedin url -> id of a deleted candidate
 
     # ---------- loading ----------
     def _load(self):
-        docs = {}
+        docs, gone = {}, {}
         for key in POOLS:
             for d in self.store.candidates(key):
                 d["_pool"] = key
+                if d.get("deleted"):          # deleted on the website: hidden everywhere, kept so it can come back
+                    u = transfer.clean_url((d.get("manual") or {}).get("linkedin_url") or d.get("linkedin_url"))
+                    if u:
+                        gone[u] = f"{key}:{d['_id']}"
+                    continue
                 docs[f"{key}:{d['_id']}"] = d
+        self._gone = gone
         return docs
 
     def _refresh_bg(self):
@@ -324,6 +331,10 @@ class Candidates:
                 r = self.update_fields(cid, {k: (str(v) if not isinstance(v, (int, float)) else v) for k, v in data.items()}, user)
                 updated += 1 if r.get("ok") else 0
                 continue
+            if data["linkedin_url"] in self._gone:
+                r = self.create(data["pool"], data, user)
+                added += 1 if r.get("ok") else 0
+                continue
             pool_key = next(k for k, v in POOLS.items() if v == data["pool"])
             manual = {k: v for k, v in data.items() if k in allowed or k == "name"}
             doc = {"pool": data["pool"], "name": data["name"], "linkedin_url": data["linkedin_url"], "readiness": "Discovered",
@@ -438,26 +449,65 @@ class Candidates:
         return {"ok": True}
 
     def create(self, pool_label, data, user):
+        """Add one candidate by hand. data = field values from the Add candidate form."""
         key = next((k for k, v in POOLS.items() if v == pool_label), None)
         if not key:
-            return {"error": "bad_value", "message": "Choose a pool"}
-        if not str(data.get("name") or "").strip() or "linkedin.com/in/" not in str(data.get("linkedin_url") or ""):
-            return {"error": "bad_value", "message": "Name and a LinkedIn profile URL are required"}
-        url = data["linkedin_url"].strip().lower().rstrip("/").replace("://in.linkedin.com", "://www.linkedin.com")
-        if any(str(d.get("linkedin_url") or "").lower().rstrip("/") == url for d in self.docs().values()):
-            return {"error": "duplicate", "message": "This LinkedIn profile is already in the database"}
+            return {"error": "bad_value", "message": "Choose a pool (ServiceNow or AI/ML)"}
+        url = transfer.clean_url(data.get("linkedin_url"))
+        if not str(data.get("name") or "").strip() or not url:
+            return {"error": "bad_value", "message": "Name and a LinkedIn profile URL (linkedin.com/in/...) are required"}
+        for cid, d in self.docs().items():
+            if transfer.clean_url((d.get("manual") or {}).get("linkedin_url") or d.get("linkedin_url")) == url:
+                return {"error": "duplicate", "message": f"This LinkedIn profile is already saved as {d.get('name') or 'a candidate'}", "id": cid}
+        fields = self.fields()
+        allowed = {f["key"]: f for f in fields if not f.get("custom")} | {f["key"]: f for f in scoring.EXTRA_EDITABLE}
+        manual = {}
+        for k, v in data.items():
+            if k not in allowed or v in ("", None):
+                continue
+            v = v.strip() if isinstance(v, str) else v
+            f = allowed[k]
+            if f.get("type") == "number":
+                if num(v) is None:
+                    return {"error": "bad_value", "message": f"{f['label']} must be a number"}
+                v = num(v)
+            if f.get("options") and v not in f["options"]:
+                return {"error": "bad_value", "message": f"{f['label']}: choose one of {', '.join(f['options'])}"}
+            manual[k] = v
+        manual["name"], manual["linkedin_url"] = str(data["name"]).strip(), url
         stamp, day = now(), today_ist()
-        doc = {"pool": pool_label, "name": data["name"].strip(), "linkedin_url": url, "readiness": "Discovered",
-               "source": "Added on website", "source_flow": "manual (website)", "first_seen": day, "last_updated": day,
-               "manual": {k: v for k, v in data.items() if k not in ("pool",) and v not in ("", None)},
-               "app_updated_at": stamp, "app_updated_by": user["name"], "app_updated_by_id": user["id"]}
-        doc["manual"]["linkedin_url"] = url
-        cid = self.store.candidate_insert(key, doc)
-        full = f"{key}:{cid}"
-        self.store.audit_add({"cand": full, "at": stamp, "by": user["id"], "by_name": user["name"], "field": "*", "old": None, "new": None,
-                              "text": "Candidate added on the website"})
+        old = self._gone.get(url)
+        if old:                                   # it was deleted before: bring it back with the new details
+            pool_key, oid = old.split(":", 1)
+            self.store.candidate_set(pool_key, oid, {"deleted": False, **{"manual." + k: v for k, v in manual.items()},
+                                                    "app_updated_at": stamp, "app_updated_by": user["name"], "app_updated_by_id": user["id"]})
+            full = old
+            text = "Candidate added again on the website (was deleted)"
+        else:
+            doc = {"pool": pool_label, "name": manual["name"], "linkedin_url": url, "readiness": "Discovered",
+                   "source": "Added on website", "source_flow": "manual (website)", "first_seen": day, "last_updated": day,
+                   "manual": manual, "app_updated_at": stamp, "app_updated_by": user["name"], "app_updated_by_id": user["id"]}
+            full = f"{key}:{self.store.candidate_insert(key, doc)}"
+            text = "Candidate added on the website"
+        self.store.audit_add({"cand": full, "at": stamp, "by": user["id"], "by_name": user["name"], "field": "*", "old": None, "new": None, "text": text})
         self.invalidate()
         return {"ok": True, "id": full}
+
+    def delete(self, ids, user):
+        """Hide candidates everywhere on the website. The record stays in MongoDB with deleted=true (n8n sync never
+        clears it), so a wrong delete can be undone and the automation does not add the person back."""
+        docs, stamp, n = self.docs(), now(), 0
+        for cid in ids:
+            d = docs.get(cid)
+            if not d:
+                continue
+            self.store.candidate_set(d["_pool"], d["_id"], {"deleted": True, "deleted_at": stamp, "deleted_by": user["name"]})
+            self.store.audit_add({"cand": cid, "at": stamp, "by": user["id"], "by_name": user["name"], "field": "deleted",
+                                  "old": None, "new": True, "text": "Candidate deleted on the website"})
+            n += 1
+        if n:
+            self.invalidate()
+        return {"ok": True, "deleted": n}
 
     # ---------- dashboard ----------
     def dashboard(self, user_id):

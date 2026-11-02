@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
-import { Avatar, ErrorBox, Icon, Loading, PoolChip, Ring, StatusChip, tone, useToast, when } from "../components/ui.jsx";
+import { Avatar, ErrorBox, Icon, Loading, Modal, PoolChip, Ring, StatusChip, tone, useToast, when } from "../components/ui.jsx";
 import { useCached, useData } from "../context/DataContext.jsx";
+import { go } from "../router.js";
 
 const EMPTY = ["-", "Not found", "Not collected"];
 const isEmpty = (v) => v === null || v === undefined || String(v).trim() === "" || EMPTY.includes(String(v).trim());
@@ -75,6 +76,7 @@ export default function Candidate({ id, query }) {
   const { data: c, error, loading, reload, setData } = useCached("/candidates/" + encodeURIComponent(id));
   const [draft, setDraft] = useState(null); // null = view mode
   const [busy, setBusy] = useState(false);
+  const [askDel, setAskDel] = useState(false);
   const focusKey = useRef(null);
   const filled = useRef(false);
 
@@ -136,6 +138,15 @@ export default function Candidate({ id, query }) {
       {split(c[k]).length ? <div className="chips">{split(c[k]).map((x, i) => <span key={i} className="chip c-mute tag">{x}</span>)}</div> : <Missing />}</div>
   );
   const editing = !!draft;
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api("/candidates/" + encodeURIComponent(c.id), { method: "DELETE" });
+      data.invalidate("/candidates", "/dashboard", "/daily");
+      toast(`${c.name} deleted`);
+      go("/candidates");
+    } catch (ex) { toast(ex.message, true); setBusy(false); }
+  };
 
   return (
     <>
@@ -144,9 +155,18 @@ export default function Candidate({ id, query }) {
         {editing
           ? <div style={{ display: "flex", gap: 8 }}><button className="btn" type="button" onClick={() => setDraft(null)} disabled={busy}>Cancel</button>
               <button className="btn primary" type="button" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save changes"}</button></div>
-          : <button className="btn primary" type="button" onClick={() => startEdit()}><Icon name="pen" /> Edit profile</button>}
+          : <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn danger" type="button" onClick={() => setAskDel(true)} title="Delete this candidate"><Icon name="trash" /> Delete</button>
+              <button className="btn primary" type="button" onClick={() => startEdit()}><Icon name="pen" /> Edit profile</button></div>}
       </div>
 
+      {askDel && (
+        <Modal onClose={() => !busy && setAskDel(false)}>
+          <h2>Delete {c.name}?</h2>
+          <p className="muted" style={{ margin: 0 }}>This candidate will be removed from the website: lists, dashboard, exports and counts. The automation will not add them back. If it was a mistake, add the same LinkedIn profile again and the old details come back.</p>
+          <div className="actions"><button className="btn" type="button" onClick={() => setAskDel(false)} disabled={busy}>Cancel</button>
+            <button className="btn danger solid" type="button" onClick={remove} disabled={busy}><Icon name="trash" /> {busy ? "Deleting…" : "Delete"}</button></div>
+        </Modal>)}
       <div className="cprofile">
         {/* 1. summary + basic info */}
         <aside className="panel pcard2" id="complete">

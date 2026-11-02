@@ -31,7 +31,7 @@ a{color:var(--brand)}
 
 /* forms + buttons */
 label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500}
-input[type=text],input[type=email],input[type=password],input[type=search],input[type=number],input[type=date],input[type=url],select,textarea{
+input[type=text],input[type=tel],input[type=email],input[type=password],input[type=search],input[type=number],input[type=date],input[type=url],select,textarea{
   background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;min-width:0}
 textarea{min-height:80px;resize:vertical}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;font-weight:600;font-size:13px;text-decoration:none;color:var(--ink)}
@@ -735,3 +735,37 @@ tr.picked td{background:var(--brand-soft)}
 .cexp span{font-size:11px}
 .cexp.none{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:10px;min-height:46px}
 .cexp.none span{font-style:italic;opacity:.75}
+/* ===== v3: bold lines, coloured company logo, add / delete ===== */
+.cline.strong span{font-weight:600;color:var(--text,inherit)}
+.clogo i{color:hsl(var(--h,230) 55% 38%)}
+.clogo:has(i){background:hsl(var(--h,230) 75% 93%);border-color:hsl(var(--h,230) 60% 84%)}
+[data-theme="dark"] .clogo:has(i){background:hsl(var(--h,230) 35% 22%);border-color:hsl(var(--h,230) 30% 32%)}
+[data-theme="dark"] .clogo i{color:hsl(var(--h,230) 70% 78%)}
+.clogo.sm{width:30px;height:30px;border-radius:8px}
+.rolec{display:flex;align-items:center;gap:10px;min-width:0}
+.rolec b{font-weight:600}
+.cityc{font-weight:600}
+.selact{margin-left:auto;display:flex;gap:8px}
+.selbar .selact .btn{margin-left:0}
+.btn.danger.solid{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn.danger:hover{border-color:var(--bad)}
+.tbtns a.btn{text-decoration:none}
+/* add candidate page */
+.newc h2{margin:0 0 4px;font-size:16px}
+.newc h2 em,.newc label em{color:var(--bad);font-style:normal}
+.newgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.newgrid .wide{grid-column:1/-1}
+@media (max-width:900px){.newgrid{grid-template-columns:minmax(0,1fr)}}
+.newc .form2{margin-top:8px}
+.newc label.bad input,.newc label.bad select,.newc label.bad textarea{border-color:var(--bad)}
+.ferr{color:var(--bad);font-size:12px}
+.poolpick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}
+.poolopt{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;border:1.5px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+.poolopt span{font-size:12px;color:var(--muted)}
+.poolopt.on{border-color:var(--brand);background:var(--brand-soft)}
+@media (max-width:560px){.poolpick{grid-template-columns:minmax(0,1fr)}}
+.newfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:14px 0 30px}
+main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
+@media (max-width:760px){main>form>.phead,main>form>.top{padding-right:0}}
+.newgrid{align-items:start}
+.newgrid .newc:not(.wide) .form2{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}

@@ -37,7 +37,7 @@ export async function api(path, { method = "GET", body, raw = false } = {}) {
   }
   let data = null;
   try { data = await res.json(); } catch { /* empty body */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error || `Request failed (${res.status})`);
+  if (!res.ok) { const e = new ApiError(res.status, data?.error || `Request failed (${res.status})`); e.data = data; throw e; }
   return data;
 }
 

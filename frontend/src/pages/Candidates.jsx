@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { qs } from "../api.js";
+import { api, qs } from "../api.js";
 import { ExportModal, ImportModal } from "../components/Transfer.jsx";
-import { Avatar, ErrorBox, Icon, Loading, PoolChip, StatusChip, fmt, tone, useSmall, when } from "../components/ui.jsx";
+import { Avatar, ErrorBox, Icon, Loading, Modal, PoolChip, StatusChip, fmt, tone, useSmall, useToast, when } from "../components/ui.jsx";
 import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 
@@ -18,19 +18,21 @@ function Badge({ c }) {
 }
 
 // company icon from its website (favicon); initials when we don't know the website or the icon fails
-function CompanyLogo({ c }) {
+function CompanyLogo({ c, small }) {
   const [bad, setBad] = useState(false);
   if (!c.current_company) return null;
-  const ini = String(c.current_company).replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  const name = String(c.current_company);
+  const ini = name.replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  let h = 0; for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;   // same company = same colour
   return (
-    <span className="clogo" title={c.current_company}>
+    <span className={"clogo" + (small ? " sm" : "")} title={name} style={{ "--h": h }}>
       {c.company_domain && !bad ? <img src={`https://www.google.com/s2/favicons?domain=${c.company_domain}&sz=64`} alt="" loading="lazy" onError={() => setBad(true)} /> : <i>{ini}</i>}
     </span>
   );
 }
 
 function Card({ c, picked, onPick }) {
-  const Line = ({ icon, v, empty }) => <div className={"cline" + (v ? "" : " none")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
+  const Line = ({ icon, v, empty, strong }) => <div className={"cline" + (v ? "" : " none") + (strong && v ? " strong" : "")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
   return (
     <a className={"card ccard" + (picked ? " picked" : "")} href={href(c.id)}>
       <label className="pick" onClick={(e) => e.stopPropagation()} title="Select">
@@ -46,8 +48,8 @@ function Card({ c, picked, onPick }) {
         </div>
       ) : <div className="cexp none"><span>Experience not added yet</span></div>}
       <div className="clines">
-        <Line icon="building" v={c.current_company} empty="Company not added" />
-        <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" />
+        <Line icon="building" v={c.current_company} empty="Company not added" strong />
+        <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
         <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
@@ -74,6 +76,17 @@ export default function Candidates({ query }) {
   const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (query.get("first_seen")) go("/candidates"); };
   const [picked, setPicked] = useState(() => new Set());
   const [modal, setModal] = useState("");
+  const [busyDel, setBusyDel] = useState(false);
+  const toast = useToast();
+  const delSelected = async () => {
+    setBusyDel(true);
+    try {
+      const res = await api("/candidates/delete", { method: "POST", body: { ids: [...picked] } });
+      toast(`Deleted ${res.deleted} candidate${res.deleted === 1 ? "" : "s"}`);
+      setPicked(new Set()); setModal("");
+      data.invalidate("/candidates?", "/dashboard", "/daily"); reload();
+    } catch (ex) { toast(ex.message, true); } finally { setBusyDel(false); }
+  };
   const pick = (id, on) => setPicked((p) => { const n = new Set(p); on ? n.add(id) : n.delete(id); return n; });
   const pageIds = r ? r.items.map((c) => c.id) : [];
   const allOnPage = pageIds.length > 0 && pageIds.every((id) => picked.has(id));
@@ -94,10 +107,18 @@ export default function Candidates({ query }) {
     <>
       <div className="top"><div><h1>Candidates</h1><p>{fmt(s.total)} candidates match your filters</p></div>
         <div className="tbtns">
+          <a className="btn primary icon" href="/candidate/new" title="Add a candidate by hand"><Icon name="plus" /><span>Add candidate</span></a>
           <button className="btn icon" type="button" onClick={() => setModal("import")} title="Import from CSV / Excel" aria-label="Import from CSV or Excel"><Icon name="import" /><span>Import</span></button>
           <button className="btn icon" type="button" onClick={() => setModal("export")} title="Export to CSV / Excel" aria-label="Export to CSV or Excel"><Icon name="export" /><span>Export</span></button>
         </div></div>
       {modal === "export" && <ExportModal selected={[...picked]} total={s.total} filters={F} onClose={() => setModal("")} />}
+      {modal === "delete" && (
+        <Modal onClose={() => !busyDel && setModal("")}>
+          <h2>Delete {fmt(picked.size)} candidate{picked.size === 1 ? "" : "s"}?</h2>
+          <p className="muted" style={{ margin: 0 }}>They will be removed from the website: lists, dashboard, exports and counts. The automation will not add them back. If it was a mistake, adding the same LinkedIn profile again brings back their old details.</p>
+          <div className="actions"><button className="btn" type="button" onClick={() => setModal("")} disabled={busyDel}>Cancel</button>
+            <button className="btn danger solid" type="button" onClick={delSelected} disabled={busyDel}><Icon name="trash" /> {busyDel ? "Deleting…" : "Delete"}</button></div>
+        </Modal>)}
       {modal === "import" && <ImportModal onClose={() => setModal("")} onDone={() => { data.invalidate("/candidates?", "/dashboard", "/daily"); reload(); }} />}
       <section className="kpis mini">
         <K hl l="Candidates" v={fmt(s.total)} sub={s.total === s.pool_total ? (F.pool ? F.pool + " only" : "all pools") : `of ${fmt(s.pool_total)} in ${F.pool || "pool"}`} />
@@ -135,7 +156,10 @@ export default function Candidates({ query }) {
           <b>{fmt(picked.size)} selected</b>
           {!allOnPage && <button type="button" className="linkbtn" onClick={() => pickPage(true)}>Select all {r.items.length} on this page</button>}
           <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Clear</button>
-          <button type="button" className="btn primary sm" onClick={() => setModal("export")}><Icon name="export" /> Export selected</button>
+          <div className="selact">
+            <button type="button" className="btn sm danger" onClick={() => setModal("delete")}><Icon name="trash" /> Delete</button>
+            <button type="button" className="btn primary sm" onClick={() => setModal("export")}><Icon name="export" /> Export selected</button>
+          </div>
         </div>)}
       {!r.items.length ? <div className="panel empty">No candidates match these filters. <button className="btn sm" type="button" onClick={reset}>Reset filters</button></div>
         : view === "cards" ? <div className="cards">{r.items.map((c) => <Card key={c.id} c={c} picked={picked.has(c.id)} onPick={pick} />)}</div>
@@ -144,7 +168,7 @@ export default function Candidates({ query }) {
             <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
               <td className="pickc"><label className="avsel" onClick={(e) => e.stopPropagation()}><Avatar c={c} /><input type="checkbox" checked={picked.has(c.id)} onChange={(e) => pick(c.id, e.target.checked)} aria-label={"Select " + c.name} /></label></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
-              <td>{c.current_title}<div className="small muted">{c.current_company}</div></td><td>{c.city}</td>
+              <td><div className="rolec"><CompanyLogo c={c} small /><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}</td>
               <td>{c.domain_experience_years != null || c.total_experience_years != null ? <span className="expchip">{c.domain_experience_years ?? "–"}<small> / {c.total_experience_years ?? "–"} yrs</small></span> : <span className="muted">-</span>}</td><td><StatusChip status={c.data_status} /></td>
               <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>
