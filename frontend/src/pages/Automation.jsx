@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ErrorBox, Icon, Kpi, Loading, fmt, useSmall } from "../components/ui.jsx";
+import { useEffect, useMemo, useState } from "react";
+import { ErrorBox, Icon, Kpi, Loading, fmt } from "../components/ui.jsx";
 import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
@@ -60,15 +60,18 @@ export default function Automation({ query }) {
   const setRange = (f, t) => go("/automation" + qs({ from: f, to: t < f ? f : t }));
   const [job, setJob] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
-  const [all, setAll] = useState(false);
-  const small = useSmall();
+  const [page, setPage] = useState(0);
+  const PER = 10;
 
+  useEffect(() => setPage(0), [job, onlyIssues, from, to]);
   const runs = useMemo(() => (d?.runs || []).filter((r) => (!job || r.job === job) && (!onlyIssues || r.status !== "ok")), [d, job, onlyIssues]);
   if (loading && !d) return <Loading />;
   if (error) return <ErrorBox error={error} retry={reload} />;
   const w = d.totals, single = d.start === d.end;
   const range = single ? (d.start === d.today ? "today" : nice(d.start)) : `${nice(d.start)} – ${nice(d.end)}`;
-  const shown = small && !all ? runs.slice(0, 5) : runs;
+  const pages = Math.max(1, Math.ceil(runs.length / PER));
+  const pg = Math.min(page, pages - 1);
+  const shown = runs.slice(pg * PER, pg * PER + PER);
   const issueCount = d.errors.length + d.missed.length + d.issues.length;
   const skipped = Object.values(w.reasons || {}).reduce((a, b) => a + b, 0);
   const reasons = Object.entries(w.reasons || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: REASON[k] || k, value: v }));
@@ -108,7 +111,7 @@ export default function Automation({ query }) {
             </div>
           </div>
           {runs.length ? (
-            <div className="tbl scroll" style={{ "--h": "max(560px, calc(100vh - 200px))" }}>
+            <div className="tbl">
               <table className="runtbl"><thead><tr><th>When</th><th>Job</th><th>Status</th><th>Found</th><th>Added</th><th>Rejected</th><th>Cost</th><th>Details</th></tr></thead>
                 <tbody>{shown.map((r, i) => (
                   <tr key={r.run_at + r.job + i}>
@@ -125,7 +128,17 @@ export default function Automation({ query }) {
                   </tr>))}</tbody></table>
             </div>
           ) : <div className="empty small" style={{ padding: "40px 12px" }}>{d.runs.length ? "No runs match this filter." : "No run log in the database yet. Add the run-log node in n8n (or run import_runs.py once to load the past runs from the sheet)."}</div>}
-          {small && !all && runs.length > 5 && <button type="button" className="btn sm viewall" onClick={() => setAll(true)}>View all {runs.length}</button>}
+          {runs.length > PER && (
+            <div className="pager">
+              <span className="small muted">{pg * PER + 1}–{Math.min(runs.length, pg * PER + PER)} of {runs.length} runs</span>
+              <div className="pbtns">
+                <button type="button" className="btn sm" disabled={pg === 0} onClick={() => setPage(pg - 1)}>‹ Prev</button>
+                {Array.from({ length: pages }, (_, i) => i).filter((i) => i === 0 || i === pages - 1 || Math.abs(i - pg) <= 1).map((i, k, a) => (
+                  <span key={i} style={{ display: "contents" }}>{k > 0 && i - a[k - 1] > 1 && <span className="muted">…</span>}
+                    <button type="button" className={"btn sm" + (i === pg ? " primary" : "")} aria-current={i === pg ? "page" : undefined} onClick={() => setPage(i)}>{i + 1}</button></span>))}
+                <button type="button" className="btn sm" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>Next ›</button>
+              </div>
+            </div>)}
         </section>
 
         <div className="stack">

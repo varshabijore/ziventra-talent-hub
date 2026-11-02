@@ -597,3 +597,10 @@ nav.side .nav:hover::after{display:none}
 .skiptop small{font-weight:400;color:var(--muted)}
 .skipbar{height:8px;border-radius:99px;background:var(--line, rgba(127,127,127,.15));overflow:hidden}
 .skipbar i{display:block;height:100%;border-radius:99px;background:var(--warn)}
+
+/* automation: run log pagination */
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line, rgba(127,127,127,.15))}
+.pbtns{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pbtns .btn{min-width:36px;justify-content:center}
+.pbtns .btn:disabled{opacity:.45;cursor:default}
+.runtbl td:first-child b{white-space:nowrap}
