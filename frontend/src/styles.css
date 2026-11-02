@@ -769,3 +769,27 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 @media (max-width:760px){main>form>.phead,main>form>.top{padding-right:0}}
 .newgrid{align-items:start}
 .newgrid .newc:not(.wide) .form2{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+/* ===== v4: company box instead of initials (cards + table), selectable ===== */
+.clogo.md{width:36px;height:36px;border-radius:10px}
+.clogo.md img{width:24px;height:24px}
+.clogo.md i{font-size:12px}
+.clogo.lg{width:44px;height:44px;border-radius:12px}
+.clogo.lg img{width:28px;height:28px}
+.clogo.lg i{font-size:14px}
+.clogo.empty{background:var(--brand-soft);border:1px dashed color-mix(in srgb,var(--brand) 25%,transparent)}
+.avsel{width:auto;height:auto}
+.avsel .clogo{transition:opacity .12s}
+.ptbl tr:hover .avsel .clogo,.ptbl.selecting .avsel .clogo,tr.picked .avsel .clogo,
+.ccard:hover .avsel .clogo,.cards.selecting .avsel .clogo,.ccard.picked .avsel .clogo{opacity:0}
+.ccard .avsel input{position:absolute;opacity:0;pointer-events:none;width:22px;height:22px;border-radius:6px}
+.ccard:hover .avsel input,.cards.selecting .avsel input,.ccard .avsel input:checked,.ccard .avsel input:focus-visible{opacity:1;pointer-events:auto}
+.ccard .avsel input{appearance:none;-webkit-appearance:none;border:1.8px solid var(--muted);background:var(--panel);display:grid;place-items:center;cursor:pointer;margin:0}
+.ccard .avsel input:checked{background:var(--brand);border-color:var(--brand)}
+.ccard .avsel input:checked::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+@media (hover:none){.ccard .avsel input{opacity:1;pointer-events:auto}.ccard .avsel .clogo{opacity:0}}
+.ccard .head{align-items:center}
+.ccard .badge{align-self:flex-start}
+/* add button */
+.addbtn{padding-left:6px}
+.addic{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.2);display:grid;place-items:center}
+.addbtn:hover .addic{background:rgba(255,255,255,.3)}

@@ -18,16 +18,27 @@ function Badge({ c }) {
 }
 
 // company icon from its website (favicon); initials when we don't know the website or the icon fails
-function CompanyLogo({ c, small }) {
+// company icon (from its website) - initials in the company's colour when there is no icon - an empty light box when no company
+function CompanyLogo({ c, size = "" }) {
   const [bad, setBad] = useState(false);
-  if (!c.current_company) return null;
-  const name = String(c.current_company);
+  const name = String(c.current_company || "").trim();
+  if (!name) return <span className={"clogo empty " + size} title="Company not added" />;
   const ini = name.replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
   let h = 0; for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;   // same company = same colour
   return (
-    <span className={"clogo" + (small ? " sm" : "")} title={name} style={{ "--h": h }}>
+    <span className={"clogo " + size} title={name} style={{ "--h": h }}>
       {c.company_domain && !bad ? <img src={`https://www.google.com/s2/favicons?domain=${c.company_domain}&sz=64`} alt="" loading="lazy" onError={() => setBad(true)} /> : <i>{ini}</i>}
     </span>
+  );
+}
+
+// company box that turns into a checkbox on hover / while selecting
+function PickLogo({ c, picked, onPick, size }) {
+  return (
+    <label className="avsel" onClick={(e) => e.stopPropagation()} title={c.current_company ? `${c.current_company} · click to select` : "Click to select"}>
+      <CompanyLogo c={c} size={size} />
+      <input type="checkbox" checked={picked} onChange={(e) => onPick(c.id, e.target.checked)} onClick={(e) => e.stopPropagation()} aria-label={"Select " + c.name} />
+    </label>
   );
 }
 
@@ -35,12 +46,10 @@ function Card({ c, picked, onPick }) {
   const Line = ({ icon, v, empty, strong }) => <div className={"cline" + (v ? "" : " none") + (strong && v ? " strong" : "")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
   return (
     <a className={"card ccard" + (picked ? " picked" : "")} href={href(c.id)}>
-      <label className="pick" onClick={(e) => e.stopPropagation()} title="Select">
-        <input type="checkbox" checked={picked} onChange={(e) => onPick(c.id, e.target.checked)} onClick={(e) => e.stopPropagation()} aria-label={"Select " + c.name} /></label>
-      <div className="head"><Avatar c={c} />
+      <div className="head"><PickLogo c={c} picked={picked} onPick={onPick} size="lg" />
         <div style={{ minWidth: 0, flex: 1 }}><div className="name">{c.name}</div>
           <div className="role">{c.current_title || c.standard_title || "Title missing"}</div></div>
-        <div className="hright"><Badge c={c} /><CompanyLogo c={c} /></div></div>
+        <Badge c={c} /></div>
       {c.total_experience_years != null || c.domain_experience_years != null ? (
         <div className="cexp">
           <div><b>{c.domain_experience_years ?? "–"}<small> yrs</small></b><span>{c.pool} exp</span></div>
@@ -50,7 +59,7 @@ function Card({ c, picked, onPick }) {
       <div className="clines">
         <Line icon="building" v={c.current_company} empty="Company not added" strong />
         <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
-        <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" />
+        <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" strong />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
       <div className="upd">Updated {when(c.updated_at)} · by {c.updated_by}</div>
@@ -107,7 +116,7 @@ export default function Candidates({ query }) {
     <>
       <div className="top"><div><h1>Candidates</h1><p>{fmt(s.total)} candidates match your filters</p></div>
         <div className="tbtns">
-          <a className="btn primary icon" href="/candidate/new" title="Add a candidate by hand"><Icon name="plus" /><span>Add candidate</span></a>
+          <a className="btn primary icon addbtn" href="/candidate/new" title="Add a candidate by hand"><span className="addic"><Icon name="userplus" size={15} /></span><span>Add candidate</span></a>
           <button className="btn icon" type="button" onClick={() => setModal("import")} title="Import from CSV / Excel" aria-label="Import from CSV or Excel"><Icon name="import" /><span>Import</span></button>
           <button className="btn icon" type="button" onClick={() => setModal("export")} title="Export to CSV / Excel" aria-label="Export to CSV or Excel"><Icon name="export" /><span>Export</span></button>
         </div></div>
@@ -162,13 +171,13 @@ export default function Candidates({ query }) {
           </div>
         </div>)}
       {!r.items.length ? <div className="panel empty">No candidates match these filters. <button className="btn sm" type="button" onClick={reset}>Reset filters</button></div>
-        : view === "cards" ? <div className="cards">{r.items.map((c) => <Card key={c.id} c={c} picked={picked.has(c.id)} onPick={pick} />)}</div>
+        : view === "cards" ? <div className={"cards" + (picked.size ? " selecting" : "")}>{r.items.map((c) => <Card key={c.id} c={c} picked={picked.has(c.id)} onPick={pick} />)}</div>
         : <div className={"panel tbl ptbl" + (picked.size ? " selecting" : "")} style={{ padding: "6px 12px" }}><table><thead><tr><th className="pickc"><label className="avsel head" title="Select all on this page"><input type="checkbox" checked={allOnPage} onChange={(e) => pickPage(e.target.checked)} aria-label="Select all on this page" /></label></th><th>Name</th><th>Pool</th><th>Current role</th><th>City</th><th title="Domain years / total years">Experience</th><th>Data status</th><th>Contact</th><th>Profile</th><th>Updated</th></tr></thead><tbody>
           {r.items.map((c) => (
             <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
-              <td className="pickc"><label className="avsel" onClick={(e) => e.stopPropagation()}><Avatar c={c} /><input type="checkbox" checked={picked.has(c.id)} onChange={(e) => pick(c.id, e.target.checked)} aria-label={"Select " + c.name} /></label></td>
+              <td className="pickc"><PickLogo c={c} picked={picked.has(c.id)} onPick={pick} size="md" /></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
-              <td><div className="rolec"><CompanyLogo c={c} small /><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}</td>
+              <td><div className="rolec"><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}</td>
               <td>{c.domain_experience_years != null || c.total_experience_years != null ? <span className="expchip">{c.domain_experience_years ?? "–"}<small> / {c.total_experience_years ?? "–"} yrs</small></span> : <span className="muted">-</span>}</td><td><StatusChip status={c.data_status} /></td>
               <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>
