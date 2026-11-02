@@ -776,7 +776,7 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .clogo.lg{width:44px;height:44px;border-radius:12px}
 .clogo.lg img{width:28px;height:28px}
 .clogo.lg i{font-size:14px}
-.clogo.empty{background:var(--brand-soft);border:1px dashed color-mix(in srgb,var(--brand) 25%,transparent)}
+.clogo.nocomp{background:var(--brand-soft);border:1px dashed color-mix(in srgb,var(--brand) 25%,transparent)}
 .avsel{width:auto;height:auto}
 .avsel .clogo{transition:opacity .12s}
 .ptbl tr:hover .avsel .clogo,.ptbl.selecting .avsel .clogo,tr.picked .avsel .clogo,

@@ -22,7 +22,7 @@ function Badge({ c }) {
 function CompanyLogo({ c, size = "" }) {
   const [bad, setBad] = useState(false);
   const name = String(c.current_company || "").trim();
-  if (!name) return <span className={"clogo empty " + size} title="Company not added" />;
+  if (!name) return <span className={"clogo nocomp " + size} title="Company not added" />;
   const ini = name.replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
   let h = 0; for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;   // same company = same colour
   return (
