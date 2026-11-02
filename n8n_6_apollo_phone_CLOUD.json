@@ -1,0 +1,692 @@
+{
+  "name": "Apollo phone finder - personal mobile (manual)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "4d650fa2-10d1-4848-8eb6-6b083f93922f",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1437675027",
+          "mode": "id",
+          "cachedResultName": "Apollo_results"
+        },
+        "options": {}
+      },
+      "id": "d7fe3449-7cec-4fb0-8736-8d13436ef0f1",
+      "name": "Read Apollo_results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        100
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "options": {}
+      },
+      "id": "d29992fb-430a-4d94-ae54-5f895582adfe",
+      "name": "Read ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        100
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "options": {}
+      },
+      "id": "987427c5-0b24-4af0-81e1-21313914043b",
+      "name": "Read AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        100
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== SETTINGS (sirf yahi badalna hai) =====\nconst MAX = 1;               // ek run me kitne candidates. PEHLE 1 se test karo. 35 credits = ~3 phone (har mobile ~9 credit)\nconst WANT_PHONE = true;     // Apollo sirf personal mobile number ke liye (email Treg se aata hai)\nconst WANT_EMAIL = false;    // true = Apollo se personal email bhi (1 credit extra)\nconst PHONE_WEBHOOK = '';    // \"Apollo phone webhook\" workflow ka Production URL yahan paste karo (zaroori)\n// ============================================\n// Kaun chuna jaata hai: Enriched + Exact title, jinka Apollo abhi tak check nahi hua, aur jinka phone missing hai\n// (WANT_EMAIL ho to email missing wale bhi).\nconst slug = u => (String(u || '').match(/linkedin\\.com\\/in\\/([^/?#]+)/i) || [])[1]?.toLowerCase() || '';\nconst done = new Set($('Read Apollo_results').all().map(i => slug(i.json.linkedin_url)).filter(Boolean));\nconst goodEmail = r => r.email && /^(valid|verified)/i.test(String(r.email_status || '')) && !/guess|check/i.test(String(r.email_status || ''));\nconst score = r => (r.open_to_work === 'Yes' ? 5 : 0) + (!r.email ? 3 : goodEmail(r) ? 0 : 2) + (WANT_PHONE && !r.phone ? 2 : 0)\n  + (/senior|lead|manager/i.test(r.seniority || '') ? 1 : 0) + Math.min(3, Number(r.servicenow_experience_years || r.ai_ml_experience_years || 0) / 3);\nconst take = (node, tab) => $(node).all().map(i => i.json)\n  .filter(r => r.linkedin_url && slug(r.linkedin_url) && !done.has(slug(r.linkedin_url)))\n  .filter(r => ['Enriched', 'Talent-pool ready'].includes(r.readiness) && r.title_match === 'Exact')\n  .filter(r => !/apollo/i.test(String(r.contact_source || '')) && !/apollo checked/i.test(String(r.notes || '')))\n  .filter(r => (WANT_PHONE && !r.phone) || (WANT_EMAIL && !goodEmail(r)))\n  .sort((a, b) => score(b) - score(a))\n  .map(r => ({ tab, row: r }));\nconst sn = take('Read ServiceNow rows', 'ServiceNow'), ai = take('Read AI_ML rows', 'AI_ML');\nconst picks = [];\nwhile (picks.length < MAX && (sn.length || ai.length)) {\n  if (sn.length) picks.push(sn.shift());\n  if (picks.length < MAX && ai.length) picks.push(ai.shift());\n}\nif (WANT_PHONE && !PHONE_WEBHOOK.startsWith('https://')) throw new Error('WANT_PHONE true hai lekin PHONE_WEBHOOK khali hai. Webhook workflow ka Production URL paste karo.');\nreturn picks.map(({ tab, row: r }) => {\n  const url = String(r.linkedin_url).replace('://in.linkedin.com', '://www.linkedin.com').replace(/\\/+$/, '');\n  const parts = String(r.name || '').replace(/\\s+[A-Z]\\.?$/, '').trim().split(/\\s+/);\n  const body = { linkedin_url: url, first_name: parts[0] || undefined, last_name: parts.length > 1 ? parts.slice(1).join(' ') : undefined,\n    organization_name: r.current_company || undefined, reveal_personal_emails: WANT_EMAIL };\n  if (WANT_PHONE && !r.phone) { body.reveal_phone_number = true; body.webhook_url = `${PHONE_WEBHOOK}?li=${encodeURIComponent(r.linkedin_url)}&tab=${tab}`; }\n  return { json: { _tab: tab, _row: r, _phone: WANT_PHONE && !r.phone, body } };\n});\n"
+      },
+      "id": "c30fcf4f-584d-48cd-8e06-e1b1f254e2fd",
+      "name": "Pick candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/match",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "21c914b4-ab97-4ce5-b2b8-4bf523b3d7c2",
+      "name": "Apollo people match",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apollo jawab -> (1) sheet tab update  (2) MongoDB apollo_* fields  (3) Apollo_results row  (4) stats\nconst picks = $('Pick candidates').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst now = new Date(Date.now() + 5.5 * 3600e3);\nconst today = now.toISOString().slice(0, 10), stamp = now.toISOString().slice(0, 16).replace('T', ' ');\nconst norm = u => String(u || '').replace('://in.linkedin.com', '://www.linkedin.com').toLowerCase().replace(/\\/+$/, '');\nconst goodEmail = r => r.email && /^(valid|verified)/i.test(String(r.email_status || ''));\nconst st = { stamp, requested: picks.length, matched: 0, noMatch: 0, errors: 0, verified: 0, otherEmail: 0, personal: 0, emailsAdded: 0, phonesAsked: 0, credits: 0, errorText: '' };\nconst out = [];\npicks.forEach((pk, i) => {\n  const r = pk._row, tab = pk._tab, body = res[i] || {};\n  const p = body.person || null;\n  const err = body.error || body.message || (body.errors && JSON.stringify(body.errors)) || '';\n  const sheet = { linkedin_url: r.linkedin_url, last_updated: today };\n  const mongo = { linkedin_url: norm(r.linkedin_url), apollo_checked_at: stamp };\n  const log = { 'Checked at': stamp, pool: tab === 'AI_ML' ? 'AI/ML' : 'ServiceNow', name: r.name, linkedin_url: r.linkedin_url };\n  if (!p) {\n    if (err) { st.errors++; st.errorText = String(err).slice(0, 200); }\n    else st.noMatch++;\n    Object.assign(mongo, { apollo_status: err ? 'Error' : 'No match' });\n    Object.assign(log, { matched: err ? 'Error' : 'No', 'what changed in sheet': '-', notes: String(err).slice(0, 200) });\n    sheet.notes = `${r.notes || ''}; Apollo checked ${today}: ${err ? 'error' : 'no match'}`.replace(/^; /, '');\n    out.push({ json: { _tab: tab, sheet, mongo, log } });\n    return;\n  }\n  st.matched++;\n  const email = p.email && !/email_not_unlocked|domain\\.com$/i.test(p.email) ? p.email : '';\n  const es = String(p.email_status || (email ? 'unknown' : 'unavailable')).toLowerCase();\n  const personal = (p.personal_emails || []).find(Boolean) || '';\n  const company = p.organization?.name || (p.employment_history || []).find(e => e.current)?.organization_name || '';\n  const phones = (p.phone_numbers || []).map(x => x.sanitized_number || x.raw_number).filter(Boolean);\n  st.credits += 1;  // Apollo: ~1 credit per matched person (+8 per mobile, counted below)\n  if (pk._phone) st.phonesAsked++;\n  if (personal) st.personal++;\n  const changed = [];\n  if (email && es === 'verified') {\n    st.verified++;\n    if (email.toLowerCase() !== String(r.email || '').toLowerCase() || !goodEmail(r)) {\n      Object.assign(sheet, { email, email_status: 'Verified (Apollo)', contact_source: 'Apollo' }); changed.push('email (verified)'); st.emailsAdded++;\n    }\n  } else if (email) {\n    st.otherEmail++;\n    if (!r.email) { Object.assign(sheet, { email, email_status: `Apollo ${es} - not verified`, contact_source: 'Apollo' }); changed.push('email (not verified)'); st.emailsAdded++; }\n  } else if (personal && !r.email) {\n    Object.assign(sheet, { email: personal, email_status: 'Personal email (Apollo)', contact_source: 'Apollo' }); changed.push('personal email'); st.emailsAdded++;\n  }\n  if (phones[0] && !r.phone) { Object.assign(sheet, { phone: phones[0], phone_status: 'Apollo' }); changed.push('phone'); }\n  if (company && !r.current_company) { sheet.current_company = company; changed.push('company'); }\n  sheet.notes = `${r.notes || ''}; Apollo checked ${today}: ${changed.length ? changed.join(', ') : 'nothing new'}${personal && sheet.email !== personal ? ' | personal email ' + personal : ''}`.replace(/^; /, '');\n  Object.assign(mongo, { apollo_status: 'Matched', apollo_id: p.id || '', apollo_email: email, apollo_email_status: email ? es : 'unavailable',\n    apollo_personal_email: personal, apollo_phone: phones[0] || (pk._phone ? 'requested' : ''), apollo_title: p.title || '', apollo_company: company,\n    apollo_city: [p.city, p.state].filter(Boolean).join(', ') });\n  Object.assign(log, { matched: 'Yes', 'Apollo title / company': [p.title, company].filter(Boolean).join(' / '), 'Apollo email': email, 'email status': email ? es : 'unavailable',\n    'personal email': personal, phone: phones[0] || (pk._phone ? 'requested (webhook)' : ''), 'what changed in sheet': changed.join(', ') || 'nothing', notes: '' });\n  out.push({ json: { _tab: tab, sheet, mongo, log } });\n});\nif (!out.length) return [];\nout[0].json._stats = st;\nreturn out;\n"
+      },
+      "id": "7e63c5d5-13db-46e4-90da-aa26a0aa4dc4",
+      "name": "Build updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "dc30d331-ec8b-46d2-8c35-02965095bcd7",
+      "name": "ServiceNow sheet rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "0bf371f9-c1a3-4512-908f-58a9fd417465",
+      "name": "Update ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "3a094a4a-8c59-487c-bb33-29e13923395a",
+      "name": "AI_ML sheet rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "95047070-2d5a-43d3-aede-7e183f5ec001",
+      "name": "Update AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "bdb02d83-fb00-49d0-82ac-758bf6a0214f",
+      "name": "ServiceNow Mongo rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_status,apollo_id,apollo_email,apollo_email_status,apollo_personal_email,apollo_phone,apollo_title,apollo_company,apollo_city,apollo_checked_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "cc949088-f675-4e27-8ba9-a557fb7a80eb",
+      "name": "Save to ServiceNow MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "48edf203-9fde-40ce-852f-b8185de4e6cc",
+      "name": "AI_ML Mongo rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_status,apollo_id,apollo_email,apollo_email_status,apollo_personal_email,apollo_phone,apollo_title,apollo_company,apollo_city,apollo_checked_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "c7e444a2-eecb-4bb7-9e87-8a698002b253",
+      "name": "Save to AI/ML MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => ({ json: i.json.log }));\n"
+      },
+      "id": "ed6cd570-5b2e-4626-94a4-73370da7c0c1",
+      "name": "Apollo_results rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1437675027",
+          "mode": "id",
+          "cachedResultName": "Apollo_results"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "6fa83792-61d2-4816-b98d-a0d8576c223b",
+      "name": "Add to Apollo_results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Build updates').first().json._stats;\nconst notes = `Apollo: ${s.matched} matched of ${s.requested}, ${s.noMatch} no match, ${s.errors} errors. Emails: ${s.verified} verified, ${s.otherEmail} unverified, ${s.personal} personal. `\n  + `Added to sheet: ${s.emailsAdded} emails. Phones requested: ${s.phonesAsked}. Credits ~${s.credits + s.phonesAsked * 8}${s.errorText ? '. Error: ' + s.errorText : ''}`;\nreturn [{ json: {\n  sheet: { 'Run date': s.stamp, 'Flow': 'n8n (apollo)', 'Queries': 0, 'Google results': '', 'LinkedIn profiles found': s.requested,\n    'Rejected (not India / wrong title / duplicate)': s.noMatch, 'New rows added': `${s.matched} matched`, 'Apify cost ($)': 0, 'Notes': notes },\n  mongo: { run_at: s.stamp, flow: 'n8n (apollo)', found: s.requested, rejected: s.noMatch, added: `${s.matched} matched`, cost: 0,\n    matched: s.matched, emails_added: s.emailsAdded, verified: s.verified, credits: s.credits + s.phonesAsked * 8, notes, error: s.errors && !s.matched ? s.errorText : '' },\n} }];\n"
+      },
+      "id": "6a7d3b9f-ea63-4833-8442-508ed938b844",
+      "name": "Build run log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.sheet }];\n"
+      },
+      "id": "e8c63245-8264-4d29-b7c3-6733abe1b4b0",
+      "name": "Runs tab row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "63406601",
+          "mode": "id",
+          "cachedResultName": "runs"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "6bcd0cbd-ea87-4d1e-bedb-77674aeec106",
+      "name": "Log to runs tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.mongo }];\n"
+      },
+      "id": "1d844fdb-adc9-41e4-87bc-123c019a7a7d",
+      "name": "Mongo run row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "runs",
+        "fields": "run_at,flow,found,rejected,added,cost,matched,emails_added,verified,credits,notes,error",
+        "options": {}
+      },
+      "id": "4e0cf3de-8f13-483c-81ce-ef28b570a108",
+      "name": "Mongo run log",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Apollo - personal mobile number (manual)\nSchedule NAHI hai: free plan me 35 credits hi hain, khud chalao.\nPehle 'Apollo phone webhook' workflow Publish karo, uska Production URL Pick candidates me PHONE_WEBHOOK me daalo.\nMAX = 1 se test, phir 3. Har mobile ~9 credit (1 match + 8 phone). Number kuch minute baad webhook se aata hai.\nEmail Treg workflow se aata hai (WANT_EMAIL = false).",
+        "width": 560,
+        "height": 300
+      },
+      "id": "469c151a-f776-4774-adb5-35315c5a68fe",
+      "name": "Note f265",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -420
+      ]
+    }
+  ],
+  "connections": {
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read Apollo_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Apollo_results": {
+      "main": [
+        [
+          {
+            "node": "Read ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ServiceNow rows": {
+      "main": [
+        [
+          {
+            "node": "Read AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read AI_ML rows": {
+      "main": [
+        [
+          {
+            "node": "Pick candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick candidates": {
+      "main": [
+        [
+          {
+            "node": "Apollo people match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo people match": {
+      "main": [
+        [
+          {
+            "node": "Build updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build updates": {
+      "main": [
+        [
+          {
+            "node": "ServiceNow sheet rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML sheet rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ServiceNow Mongo rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML Mongo rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Apollo_results rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow sheet rows": {
+      "main": [
+        [
+          {
+            "node": "Update ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML sheet rows": {
+      "main": [
+        [
+          {
+            "node": "Update AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow Mongo rows": {
+      "main": [
+        [
+          {
+            "node": "Save to ServiceNow MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML Mongo rows": {
+      "main": [
+        [
+          {
+            "node": "Save to AI/ML MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo_results rows": {
+      "main": [
+        [
+          {
+            "node": "Add to Apollo_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run log": {
+      "main": [
+        [
+          {
+            "node": "Runs tab row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mongo run row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runs tab row": {
+      "main": [
+        [
+          {
+            "node": "Log to runs tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongo run row": {
+      "main": [
+        [
+          {
+            "node": "Mongo run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}

@@ -1,0 +1,782 @@
+{
+  "name": "Treg email enrichment - work + personal (demo)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "11 19 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a0996881-65c0-4152-899c-9889cfe8363b",
+      "name": "Daily 7:11 PM (after enrichment)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -40
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "49710ba0-e610-4eac-ba0d-f011e94ff525",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1084515567",
+          "mode": "id",
+          "cachedResultName": "Treg_results"
+        },
+        "options": {}
+      },
+      "id": "6443e52a-6d50-4f0d-9a9f-4f2392ef77b7",
+      "name": "Read Treg_results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        60
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "options": {}
+      },
+      "id": "99a12b9e-a820-41a0-a284-d26c053f3629",
+      "name": "Read ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        60
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "options": {}
+      },
+      "id": "5f633db4-641c-4322-a539-96d5bc6f66cc",
+      "name": "Read AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        680,
+        60
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== SETTINGS (sirf yahi badalna hai) =====\nconst MAX = 2;                 // ek run me kitne candidates. PEHLE 2 se test karo, phir 20-25\nconst WORK = true;             // work (office) email dhoondo   (~$0.0005-0.03 sirf milne par)\nconst PERSONAL = true;         // personal email (gmail etc.)  (~$0.04-0.10 sirf milne par)\n// Har call ka max kharcha \"Treg work email\" / \"Treg personal email\" node ke header X-Treg-Route-Max-Cost me hai.\n// ============================================\n// Kaun chuna jaata hai: Enriched + Exact, jinka Treg abhi tak check nahi hua; email nahi / pakka nahi wale pehle.\nconst slug = u => (String(u || '').match(/linkedin\\.com\\/in\\/([^/?#]+)/i) || [])[1]?.toLowerCase() || '';\n// pehle check ho chuke (error wale dobara try honge)\nconst done = new Set($('Read Treg_results').all().map(i => i.json)\n  .filter(x => !(x.notes && !x['work email'] && !x['personal email'])).map(x => slug(x.linkedin_url)).filter(Boolean));\nconst goodEmail = r => r.email && /^(valid|verified)/i.test(String(r.email_status || '')) && !/guess|check/i.test(String(r.email_status || ''));\nconst score = r => (!r.email ? 6 : goodEmail(r) ? 0 : 4) + (r.open_to_work === 'Yes' ? 3 : 0) + (/senior|lead|manager/i.test(r.seniority || '') ? 1 : 0)\n  + String(r.last_updated || r.first_seen || '').localeCompare('2026-10-01') * 0.5;\nconst take = (node, tab) => $(node).all().map(i => i.json)\n  .filter(r => r.linkedin_url && slug(r.linkedin_url) && !done.has(slug(r.linkedin_url)))\n  .filter(r => ['Enriched', 'Talent-pool ready'].includes(r.readiness) && r.title_match === 'Exact')\n  .filter(r => !/treg checked/i.test(String(r.notes || '')))\n  .sort((a, b) => score(b) - score(a))\n  .map(r => ({ tab, row: r }));\nconst sn = take('Read ServiceNow rows', 'ServiceNow'), ai = take('Read AI_ML rows', 'AI_ML');\nconst picks = [];\nwhile (picks.length < MAX && (sn.length || ai.length)) {\n  if (sn.length) picks.push(sn.shift());\n  if (picks.length < MAX && ai.length) picks.push(ai.shift());\n}\nreturn picks.map(({ tab, row: r }) => {\n  const url = String(r.linkedin_url).replace('://in.linkedin.com', '://www.linkedin.com').replace(/\\/+$/, '');\n  const name = String(r.name || '').replace(/\\s+[A-Z]\\.?$/, '').trim();\n  // WORK/PERSONAL false ho to khali body jaati hai: Treg use refuse karta hai, koi charge nahi\n  return { json: { _tab: tab, _row: r, work: WORK ? { linkedin_url: url, full_name: name || undefined } : {},\n    personal: PERSONAL ? { linkedin_url: url } : {} } };\n});\n"
+      },
+      "id": "40601f3a-0773-40b5-898d-ef94d2be6038",
+      "name": "Pick candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://treg.to/call/treg.people.email.find",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Treg-Route-Max-Cost",
+              "value": "0.03"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.work) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "10871624-117b-4f75-a273-f3a2136dc8d1",
+      "name": "Treg work email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://treg.to/call/treg.people.email.find.personal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Treg-Route-Max-Cost",
+              "value": "0.10"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Pick candidates').item.json.personal) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 90000
+        }
+      },
+      "id": "df431a2c-cff2-441b-a3a6-325bc6c6f24e",
+      "name": "Treg personal email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Treg jawab -> (1) sheet tab update  (2) MongoDB treg_* fields  (3) Treg_results row  (4) stats\nconst picks = $('Pick candidates').all().map(i => i.json);\nconst work = $('Treg work email').all().map(i => i.json);\nconst pers = $input.all().map(i => i.json);\nconst now = new Date(Date.now() + 5.5 * 3600e3);\nconst today = now.toISOString().slice(0, 10), stamp = now.toISOString().slice(0, 16).replace('T', ' ');\nconst norm = u => String(u || '').replace('://in.linkedin.com', '://www.linkedin.com').toLowerCase().replace(/\\/+$/, '');\nconst goodEmail = r => r.email && /^(valid|verified)/i.test(String(r.email_status || '')) && !/guess|check/i.test(String(r.email_status || ''));\nconst hdr = (res, k) => (res && res.headers && (res.headers[k] ?? res.headers[k.toLowerCase()])) || '';\n// one Treg answer -> {email, verified, by, cost, error}\nfunction read(res, asked) {\n  if (!asked) return { email: '', verified: false, by: '', cost: 0, error: '', skipped: true };\n  const b = (res && res.body !== undefined ? res.body : res) || {};\n  const body = typeof b === 'string' ? (() => { try { return JSON.parse(b); } catch { return { error: b }; } })() : b;\n  const code = Number(res && res.statusCode) || 200;\n  const out = body.output || {};\n  const cost = Number(hdr(res, 'x-treg-cost-micro') || body._treg?.cost_micro || 0) / 1e6;\n  const err = code >= 400 || body.error ? String(body.error?.message || body.error || body.detail || body.message || `HTTP ${code}`).slice(0, 160) : '';\n  return { email: out.email || '', verified: !!out.verified, by: String(hdr(res, 'x-treg-served-by') || body._treg?.served_by || ''), cost, error: err };\n}\nconst st = { stamp, checked: picks.length, work: 0, personal: 0, emailsAdded: 0, cost: 0, errors: 0, errorText: '' };\nconst out = [];\npicks.forEach((pk, i) => {\n  const r = pk._row, tab = pk._tab;\n  const w = read(work[i], Object.keys(pk.work || {}).length > 0), p = read(pers[i], Object.keys(pk.personal || {}).length > 0);\n  st.cost += w.cost + p.cost;\n  for (const x of [w, p]) if (x.error && !x.skipped) { st.errors++; st.errorText = x.error; }\n  if (w.email) st.work++;\n  if (p.email) st.personal++;\n  const sheet = { linkedin_url: r.linkedin_url, last_updated: today };\n  const changed = [];\n  if (w.email && !goodEmail(r) && (w.verified || !r.email)) {\n    Object.assign(sheet, { email: w.email, email_status: `Treg ${w.verified ? 'verified' : 'found - not verified'}${w.by ? ' (' + w.by + ')' : ''}`, contact_source: 'Treg' });\n    changed.push(w.verified ? 'work email (verified)' : 'work email'); st.emailsAdded++;\n  } else if (p.email && !r.email) {\n    Object.assign(sheet, { email: p.email, email_status: 'Personal email (Treg)', contact_source: 'Treg' }); changed.push('personal email'); st.emailsAdded++;\n  }\n  const errTxt = [w.error && 'work: ' + w.error, p.error && 'personal: ' + p.error].filter(Boolean).join('; ');\n  const failed = errTxt && !w.email && !p.email;   // error: sheet ko mat chhuo, agle run me dobara try hoga\n  if (!failed) sheet.notes = `${r.notes || ''}; Treg checked ${today}: ${changed.length ? changed.join(', ') : errTxt ? 'error' : 'nothing new'}${p.email && sheet.email !== p.email ? ' | personal email ' + p.email : ''}`.replace(/^; /, '');\n  const mongo = { linkedin_url: norm(r.linkedin_url), treg_status: errTxt && !w.email && !p.email ? 'Error' : (w.email || p.email) ? 'Found' : 'Not found',\n    treg_work_email: w.email, treg_work_verified: w.verified ? 'yes' : (w.email ? 'no' : ''), treg_personal_email: p.email,\n    treg_served_by: [w.by, p.by].filter(Boolean).join(', '), treg_cost: Math.round((w.cost + p.cost) * 10000) / 10000, treg_checked_at: stamp };\n  const log = { 'Checked at': stamp, pool: tab === 'AI_ML' ? 'AI/ML' : 'ServiceNow', name: r.name, linkedin_url: r.linkedin_url,\n    'work email': w.email, 'work verified': w.email ? (w.verified ? 'yes' : 'no') : '', 'work served by': w.by, 'personal email': p.email,\n    'personal served by': p.by, 'cost ($)': Math.round((w.cost + p.cost) * 10000) / 10000, 'what changed in sheet': changed.join(', ') || 'nothing', notes: errTxt };\n  out.push({ json: { _tab: tab, sheet: failed ? null : sheet, mongo, log } });\n});\nif (!out.length) return [];\nst.cost = Math.round(st.cost * 10000) / 10000;\nout[0].json._stats = st;\nreturn out;\n"
+      },
+      "id": "2ac9b320-02f7-4141-95f7-70dfd5fec63a",
+      "name": "Build updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1640,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "7fede911-6774-4abb-80b6-31257f0d593d",
+      "name": "ServiceNow sheet rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "6bc1ec24-125b-4397-84ac-73b4ed5597db",
+      "name": "Update ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "f3c7ec98-2164-4789-8500-39b608d68353",
+      "name": "AI_ML sheet rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "8dc0842e-cb67-4602-8493-5586fbcac9d5",
+      "name": "Update AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "29193308-a1d9-46f2-ab57-c87e7301b5cf",
+      "name": "ServiceNow Mongo rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,treg_status,treg_work_email,treg_work_verified,treg_personal_email,treg_served_by,treg_cost,treg_checked_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "2bdf7dd8-7d45-4d29-a2ce-5f89aa2c7f04",
+      "name": "Save to ServiceNow MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "9369732e-9c88-4a22-b76a-55858baff32d",
+      "name": "AI_ML Mongo rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,treg_status,treg_work_email,treg_work_verified,treg_personal_email,treg_served_by,treg_cost,treg_checked_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "9177f14c-035e-42df-a19e-9602e18aa80e",
+      "name": "Save to AI/ML MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => ({ json: i.json.log }));\n"
+      },
+      "id": "5d16933a-b054-42ef-9787-401cc4e7ca6e",
+      "name": "Treg_results rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1084515567",
+          "mode": "id",
+          "cachedResultName": "Treg_results"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "00df8972-9660-4ec7-b14d-781c7ccf8fe5",
+      "name": "Add to Treg_results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Build updates').first().json._stats;\nconst notes = `Treg: ${s.checked} checked. Work emails: ${s.work}, personal emails: ${s.personal}. Added to sheet: ${s.emailsAdded} emails. Cost $${s.cost}${s.errorText ? '. Error: ' + s.errorText : ''}`;\nreturn [{ json: {\n  sheet: { 'Run date': s.stamp, 'Flow': 'n8n (treg)', 'Queries': 0, 'Google results': '', 'LinkedIn profiles found': s.checked,\n    'Rejected (not India / wrong title / duplicate)': 0, 'New rows added': `${s.emailsAdded} emails`, 'Apify cost ($)': s.cost, 'Notes': notes },\n  mongo: { run_at: s.stamp, flow: 'n8n (treg)', found: s.checked, rejected: 0, added: `${s.emailsAdded} emails`, cost: s.cost,\n    checked: s.checked, work_found: s.work, personal_found: s.personal, emails_added: s.emailsAdded, notes,\n    error: s.errors && !s.work && !s.personal && s.errors >= s.checked ? s.errorText : '' },\n} }];\n"
+      },
+      "id": "f8164e26-10a8-4ff7-b31d-550fa9cf5afc",
+      "name": "Build run log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.sheet }];\n"
+      },
+      "id": "3eb77c3d-64a7-4a19-901e-cf40c8579a70",
+      "name": "Runs tab row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "63406601",
+          "mode": "id",
+          "cachedResultName": "runs"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "948ee1a7-350c-4170-87bf-750680fbd316",
+      "name": "Log to runs tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2380,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.mongo }];\n"
+      },
+      "id": "3ae64361-6030-40a3-a711-d7edfb0da8c9",
+      "name": "Mongo run row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "runs",
+        "fields": "run_at,flow,found,rejected,added,cost,checked,work_found,personal_found,emails_added,notes,error",
+        "options": {}
+      },
+      "id": "1dc2e938-8f0f-4f16-8867-6b86217516b2",
+      "name": "Mongo run log",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        2380,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Treg email (work + personal) - 1 week demo\nRoz 7:11 PM (Publish karne par) + Manual test.\nPick candidates: MAX (pehle 2, phir 25), WORK, PERSONAL.\nKharcha sirf email MILNE par: work ~$0.0005-0.03, personal ~$0.04-0.10.\nMax per call: header X-Treg-Route-Max-Cost (work 0.03, personal 0.10).\nVerified work email purana andaaza wala email badal deta hai; baaki sirf khali jagah.\nError (jaise balance khatam) par sheet nahi badalti, agle run me dobara try.",
+        "width": 600,
+        "height": 300
+      },
+      "id": "b53bf999-55ed-447f-a9ff-321110d9a44f",
+      "name": "Note 4105",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -440
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 7:11 PM (after enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Read Treg_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read Treg_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Treg_results": {
+      "main": [
+        [
+          {
+            "node": "Read ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ServiceNow rows": {
+      "main": [
+        [
+          {
+            "node": "Read AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read AI_ML rows": {
+      "main": [
+        [
+          {
+            "node": "Pick candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick candidates": {
+      "main": [
+        [
+          {
+            "node": "Treg work email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Treg work email": {
+      "main": [
+        [
+          {
+            "node": "Treg personal email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Treg personal email": {
+      "main": [
+        [
+          {
+            "node": "Build updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build updates": {
+      "main": [
+        [
+          {
+            "node": "ServiceNow sheet rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML sheet rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ServiceNow Mongo rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML Mongo rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Treg_results rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow sheet rows": {
+      "main": [
+        [
+          {
+            "node": "Update ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML sheet rows": {
+      "main": [
+        [
+          {
+            "node": "Update AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow Mongo rows": {
+      "main": [
+        [
+          {
+            "node": "Save to ServiceNow MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML Mongo rows": {
+      "main": [
+        [
+          {
+            "node": "Save to AI/ML MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Treg_results rows": {
+      "main": [
+        [
+          {
+            "node": "Add to Treg_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run log": {
+      "main": [
+        [
+          {
+            "node": "Runs tab row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mongo run row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runs tab row": {
+      "main": [
+        [
+          {
+            "node": "Log to runs tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongo run row": {
+      "main": [
+        [
+          {
+            "node": "Mongo run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}

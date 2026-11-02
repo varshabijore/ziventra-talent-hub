@@ -18,13 +18,17 @@ SCHEDULE = {
     "Enrichment": ["11:41", "18:41"],
     "Refresh": ["15:41", "20:41"],
     "Sync": ["10:45", "13:45", "16:45", "19:45"],
+    "Apollo": [],  # manual: started by hand in n8n (few credits)
+    "Treg": ["19:11"],
 }
-JOBS = ["Scraping", "Enrichment", "Refresh", "Sync"]
+JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
 WHAT = {
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
     "Enrichment": "Scrapes the full LinkedIn profile + email for Discovered candidates",
     "Refresh": "Re-checks enriched profiles older than 30 days for LinkedIn changes",
     "Sync": "Copies the master sheet into MongoDB (what this website reads)",
+    "Apollo": "Finds the personal mobile number from Apollo (run by hand, limited credits)",
+    "Treg": "Finds work and personal email through Treg for enriched candidates",
 }
 
 
@@ -42,6 +46,10 @@ def _float(v):
 
 def job_of(flow, job=""):
     s = f"{job} {flow}".lower()
+    if "apollo" in s:
+        return "Apollo"
+    if "treg" in s:
+        return "Treg"
     if "enrich" in s:
         return "Enrichment"
     if "refresh" in s:
@@ -80,6 +88,7 @@ def parse(doc):
     r["checked"], r["changed"] = (int(ch.group(1)), int(ch.group(2))) if ch else (_int(d.get("checked")), _int(d.get("changed")))
 
     r["new"] = r["enriched"] = r["synced"] = 0
+    r["matched"] = r["emails_added"] = r["credits"] = r["work_found"] = r["personal_found"] = 0
     if job == "Scraping":
         r["new"] = _int(added) if added else (r["new_sn"] + r["new_ai"] or _int(notes))
         if not r["found"] and r["new"]:
@@ -88,6 +97,24 @@ def parse(doc):
         r["enriched"] = _int(added) if added else _int(notes)
         if not r["found"]:
             r["found"] = r["enriched"] + r["rejected"] + r["scrape_failed"]
+    elif job == "Apollo":
+        m2 = re.search(r"(\d+)\s*matched of\s*(\d+)", notes)
+        r["matched"] = _int(d.get("matched")) if d.get("matched") is not None else (int(m2.group(1)) if m2 else _int(added))
+        if not r["found"] and m2:
+            r["found"] = int(m2.group(2))
+        ea = re.search(r"Added to sheet:\s*(\d+)", notes)
+        r["emails_added"] = _int(d.get("emails_added")) if d.get("emails_added") is not None else (int(ea.group(1)) if ea else 0)
+        cr = re.search(r"Credits\s*~?(\d+)", notes)
+        r["credits"] = _int(d.get("credits")) if d.get("credits") is not None else (int(cr.group(1)) if cr else 0)
+    elif job == "Treg":
+        tw = re.search(r"Work emails:\s*(\d+),\s*personal emails:\s*(\d+)", notes)
+        r["work_found"] = _int(d.get("work_found")) if d.get("work_found") is not None else (int(tw.group(1)) if tw else 0)
+        r["personal_found"] = _int(d.get("personal_found")) if d.get("personal_found") is not None else (int(tw.group(2)) if tw else 0)
+        ea = re.search(r"Added to sheet:\s*(\d+)", notes)
+        r["emails_added"] = _int(d.get("emails_added")) if d.get("emails_added") is not None else (int(ea.group(1)) if ea else 0)
+        tc = re.search(r"(\d+)\s*checked", notes)
+        r["checked"] = _int(d.get("checked")) if d.get("checked") is not None else (int(tc.group(1)) if tc else r["found"])
+        r["found"] = r["found"] or r["checked"]
     elif job == "Sync":
         r["synced"] = _int(d.get("synced") or added or notes)
 
@@ -109,6 +136,18 @@ def parse(doc):
             iss.append(f"{r['scrape_failed']} profile(s) could not be scraped")
         if r["found"] and r["enriched"] < 0.8 * r["found"]:
             iss.append(f"Only {r['enriched']} of {r['found']} profiles were enriched")
+    elif job == "Apollo" and not r["error"]:
+        if r["found"] and r["matched"] == 0:
+            iss.append("Apollo did not match any of the candidates")
+        em = re.search(r"Error:\s*(.+)$", notes)
+        if em:
+            iss.append("Apollo error: " + em.group(1)[:160])
+    elif job == "Treg" and not r["error"]:
+        if r["checked"] and r["work_found"] + r["personal_found"] == 0:
+            iss.append("Treg found no emails for these candidates")
+        em = re.search(r"Error:\s*(.+)$", notes)
+        if em:
+            iss.append("Treg error: " + em.group(1)[:160])
     elif job == "Refresh" and r["checked"] == 0 and not r["error"]:
         iss.append("Refresh ran but checked 0 profiles")
     r["status"] = "error" if r["error"] else "warning" if iss else "ok"
@@ -116,6 +155,8 @@ def parse(doc):
     r["result"] = (f"{r['new']} new ({r['new_sn']} ServiceNow + {r['new_ai']} AI/ML)" if job == "Scraping"
                    else f"{r['enriched']} enriched, {r['rejected']} rejected" if job == "Enrichment"
                    else f"{r['checked']} checked, {r['changed']} changed" if job == "Refresh"
+                   else f"{r['matched']} matched, {r['emails_added']} emails added, ~{r['credits']} credits" if job == "Apollo"
+                   else f"{r['checked']} checked: {r['work_found']} work + {r['personal_found']} personal emails, ${r['cost']}" if job == "Treg"
                    else f"{r['synced']} rows synced" if job == "Sync" else notes[:120])
     r["by"] = r["source"]
     return r
@@ -138,6 +179,7 @@ def _next_run(job, now):
 
 
 SHOWN_JOBS = ["Scraping", "Enrichment", "Refresh"]  # Sync is hidden until it writes a run log
+CONTACT_JOBS = ["Apollo", "Treg"]  # shown on the "Contacts" tab
 
 
 def report(runs_raw, errors_raw, start, end):
@@ -177,22 +219,7 @@ def report(runs_raw, errors_raw, start, end):
                 if not near:
                     missed.append({"job": job, "time": t, "date": today})
 
-    jobs = []
-    for job in SHOWN_JOBS:
-        mine = [r for r in runs if r["job"] == job]
-        ever = [r for r in allruns if r["job"] == job]
-        last = ever[0] if ever else None
-        ok = sum(1 for r in mine if r["status"] == "ok")
-        jobs.append({
-            "job": job, "what": WHAT[job], "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
-            "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
-            "health": round(100 * ok / len(mine)) if mine else None,
-            "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai",
-                                           "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost")} if last else None,
-            "output": sum(r["new"] if job == "Scraping" else r["enriched"] if job == "Enrichment" else r["checked"] for r in mine),
-            "cost": round(sum(r["cost"] for r in mine), 3),
-            "warnings": sum(1 for r in mine if r["status"] != "ok"),
-        })
+    jobs = [_card(job, runs, allruns, now, ndays) for job in SHOWN_JOBS]
 
     span = [(d0 + dt.timedelta(days=i)).isoformat() for i in range(ndays)]
     series = []
@@ -217,6 +244,71 @@ def report(runs_raw, errors_raw, start, end):
                    "issues": sum(1 for r in runs if r["status"] != "ok") + len(missed) + len(errors),
                    "dup_rate": round(100 * sum(r["duplicates"] for r in scr) / found_all) if found_all else 0,
                    "emails_valid": sum(r["emails_valid"] for r in runs), "emails_risky": sum(r["emails_risky"] for r in runs),
-                   "scrape_failed": sum(r["scrape_failed"] for r in runs), "reasons": reasons},
+                   "scrape_failed": sum(r["scrape_failed"] for r in runs), "reasons": reasons,
+                   "apollo_matched": sum(r["matched"] for r in runs), "apollo_credits": sum(r["credits"] for r in runs)},
         "jobs": jobs, "series": series, "runs": runs[:300], "issues": issues, "missed": missed, "errors": errors[:50],
+    }
+
+
+def _card(job, runs, allruns, now, ndays):
+    """One job card: what it did on the chosen days + its latest run ever."""
+    mine = [r for r in runs if r["job"] == job]
+    ever = [r for r in allruns if r["job"] == job]
+    last = ever[0] if ever else None
+    ok = sum(1 for r in mine if r["status"] == "ok")
+    out = {"Scraping": "new", "Enrichment": "enriched", "Apollo": "matched", "Treg": "emails_added"}.get(job, "checked")
+    return {
+        "job": job, "what": WHAT[job], "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
+        "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
+        "health": round(100 * ok / len(mine)) if mine else None,
+        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai",
+                                       "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost", "matched",
+                                       "emails_added", "credits", "work_found", "personal_found")} if last else None,
+        "output": sum(r[out] for r in mine),
+        "credits": sum(r["credits"] for r in mine),
+        "cost": round(sum(r["cost"] for r in mine), 3),
+        "warnings": sum(1 for r in mine if r["status"] != "ok"),
+    }
+
+
+def _has(v):
+    return bool(str(v or "").strip()) and str(v).strip().lower() not in ("not found", "requested", "-", "none")
+
+
+def contacts(runs_raw, people, start, end):
+    """The Contacts tab: Apollo (phone) + Treg (email) runs and what they found per candidate."""
+    now = _now()
+    d0, d1 = sorted([dt.date.fromisoformat(start), dt.date.fromisoformat(end)])
+    start, end = d0.isoformat(), d1.isoformat()
+    ndays = (d1 - d0).days + 1
+    allruns = sorted((parse(x) for x in runs_raw), key=lambda r: r["run_at"], reverse=True)
+    allruns = [r for r in allruns if r["job"] in CONTACT_JOBS]
+    runs = [r for r in allruns if start <= r["date"] <= end]
+    rows = []
+    for v in people:
+        a_at, t_at = str(v.get("apollo_checked_at") or "")[:16], str(v.get("treg_checked_at") or "")[:16]
+        a_in, t_in = start <= a_at[:10] <= end if a_at else False, start <= t_at[:10] <= end if t_at else False
+        if not (a_in or t_in):
+            continue
+        rows.append({"id": v["id"], "name": v.get("name"), "pool": v.get("pool"), "title": v.get("current_title") or "",
+                     "checked_at": max(a_at if a_in else "", t_at if t_in else ""),
+                     "apollo": {"status": v.get("apollo_status"), "phone": v.get("apollo_phone") or "", "email": v.get("apollo_email") or "",
+                                "email_status": v.get("apollo_email_status") or "", "personal": v.get("apollo_personal_email") or "", "at": a_at} if a_in else None,
+                     "treg": {"status": v.get("treg_status"), "work": v.get("treg_work_email") or "", "verified": v.get("treg_work_verified") == "yes",
+                              "personal": v.get("treg_personal_email") or "", "by": v.get("treg_served_by") or "", "cost": v.get("treg_cost") or 0, "at": t_at} if t_in else None,
+                     "email": v.get("email") or "", "email_status": v.get("email_status") or "", "phone": v.get("phone") or ""})
+    rows.sort(key=lambda x: x["checked_at"], reverse=True)
+    ap = [x["apollo"] for x in rows if x["apollo"]]
+    tr = [x["treg"] for x in rows if x["treg"]]
+    return {
+        "start": start, "end": end, "days": ndays, "today": now.date().isoformat(),
+        "jobs": [_card(j, runs, allruns, now, ndays) for j in CONTACT_JOBS],
+        "totals": {"checked": len(rows), "apollo_checked": len(ap), "phones": sum(1 for a in ap if _has(a["phone"]) and a["phone"][:1] in "+0123456789"),
+                   "phones_pending": sum(1 for a in ap if a["phone"] == "requested"),
+                   "apollo_credits": sum(r["credits"] for r in runs if r["job"] == "Apollo"),
+                   "treg_checked": len(tr), "work": sum(1 for t in tr if _has(t["work"])), "work_verified": sum(1 for t in tr if t["verified"]),
+                   "personal": sum(1 for t in tr if _has(t["personal"])) + sum(1 for a in ap if _has(a["personal"])),
+                   "treg_cost": round(sum(r["cost"] for r in runs if r["job"] == "Treg"), 3),
+                   "emails_added": sum(r["emails_added"] for r in runs)},
+        "runs": runs[:300], "people": rows[:1000],
     }

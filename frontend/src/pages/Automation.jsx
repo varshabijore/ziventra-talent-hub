@@ -3,8 +3,9 @@ import { ErrorBox, Icon, Kpi, Loading, fmt } from "../components/ui.jsx";
 import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
+import Contacts from "./Contacts.jsx";
 
-const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Sync: "c-ai" };
+const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const nice = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const ST = { ok: ["c-good", "OK"], warning: ["c-warn", "Check"], error: ["c-bad", "Failed"] };
@@ -21,6 +22,7 @@ function lastLine(j) {
   if (j.job === "Scraping") return <>Last ran <b>{when}</b> and added <b>{l.new} new candidates</b> ({l.new_sn} ServiceNow, {l.new_ai} AI/ML).</>;
   if (j.job === "Enrichment") return <>Last ran <b>{when}</b> and enriched <b>{l.enriched} profiles</b>{l.emails_valid ? <>, {l.emails_valid} with a valid email</> : null}.</>;
   if (j.job === "Refresh") return <>Last ran <b>{when}</b> and re-checked <b>{l.checked} profiles</b>; {l.changed} had LinkedIn changes.</>;
+  if (j.job === "Apollo") return <>Last ran <b>{when}</b> and matched <b>{l.matched} of {l.found} candidates</b>; {l.emails_added} new email{l.emails_added === 1 ? "" : "s"} added (~{l.credits} credits).</>;
   return <>Last ran <b>{when}</b>: {l.result}.</>;
 }
 
@@ -31,24 +33,26 @@ function JobCard({ j, single }) {
   return (
     <div className={"panel jcard2 " + cls}>
       <div className="jhead">
-        <div><h3>{j.job}</h3><p>{j.what}</p></div>
+        <h3>{j.job}</h3>
         <span className={"pill " + cls}><span className="pdot" />{label}</span>
       </div>
+      <p className="jwhat">{j.what}</p>
       {j.logged ? (
         <>
           <p className="jlast">{lastLine(j)}</p>
           {l.issues.length > 0 && <div className="jwarn">{l.issues.map((x, k) => <div key={k}>⚠ {x}</div>)}</div>}
           <div className="jstats">
-            <div><b>{j.runs}<small> / {j.expected}</small></b><span>runs {single ? "that day" : "in these days"}</span></div>
-            <div><b>{fmt(j.output)}</b><span>{j.job === "Scraping" ? "new candidates" : j.job === "Enrichment" ? "profiles enriched" : "profiles checked"}</span></div>
-            <div><b>{money(j.cost)}</b><span>Apify cost</span></div>
+            <div><b>{j.runs}{j.expected ? <small> / {j.expected}</small> : null}</b><span>runs {single ? "that day" : "in these days"}</span></div>
+            <div><b>{fmt(j.output)}</b><span>{j.job === "Scraping" ? "new candidates" : j.job === "Enrichment" ? "profiles enriched" : j.job === "Apollo" ? "candidates matched" : "profiles checked"}</span></div>
+            {j.job === "Apollo" ? <div><b>~{fmt(j.credits)}</b><span>Apollo credits</span></div> : <div><b>{money(j.cost)}</b><span>Apify cost</span></div>}
           </div>
         </>
       ) : (
-        <p className="jlast muted">This workflow does not save its runs to the database yet. Add the "Mongo run log" node in n8n and its runs will appear here.</p>
+        <p className="jlast muted">{j.job === "Apollo" ? "Apollo has not run yet. Import the Apollo workflow in n8n and run it once; the result will appear here." : "This workflow does not save its runs to the database yet. Add the \"Mongo run log\" node in n8n and its runs will appear here."}</p>
       )}
-      <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
+      {j.schedule.length ? <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
         <span className="muted"> · runs daily at {j.schedule.join(", ")}</span></div>
+        : <div className="jfoot"><Icon name="cal" size={13} /> <b>Runs manually</b><span className="muted"> · start it in n8n when you want (limited credits)</span></div>}
     </div>
   );
 }
@@ -56,8 +60,10 @@ function JobCard({ j, single }) {
 export default function Automation({ query }) {
   const from = query.get("from") || istToday();
   const to = query.get("to") || from;
+  const tab = query.get("tab") === "contacts" ? "contacts" : "";
   const { data: d, error, loading, reload } = useCached("/automation" + qs({ from, to }), { keep: true });
-  const setRange = (f, t) => go("/automation" + qs({ from: f, to: t < f ? f : t }));
+  const setRange = (f, t) => go("/automation" + qs({ from: f, to: t < f ? f : t, tab: tab || undefined }));
+  const setTab = (k) => go("/automation" + qs({ from: query.get("from") || undefined, to: query.get("to") || undefined, tab: k || undefined }));
   const [job, setJob] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [page, setPage] = useState(0);
@@ -65,10 +71,28 @@ export default function Automation({ query }) {
 
   useEffect(() => setPage(0), [job, onlyIssues, from, to]);
   const runs = useMemo(() => (d?.runs || []).filter((r) => (!job || r.job === job) && (!onlyIssues || r.status !== "ok")), [d, job, onlyIssues]);
-  if (loading && !d) return <Loading />;
-  if (error) return <ErrorBox error={error} retry={reload} />;
-  const w = d.totals, single = d.start === d.end;
-  const range = single ? (d.start === d.today ? "today" : nice(d.start)) : `${nice(d.start)} – ${nice(d.end)}`;
+  const single = from === to;
+  const range = single ? (from === istToday() ? "today" : nice(from)) : `${nice(from)} – ${nice(to)}`;
+  const header = (
+    <>
+      <div className="top">
+        <div><h1>Automation</h1><p>{tab ? "Contact details found" : "What the n8n workflows did"} {single ? "on" : "from"} <b>{range}</b>{d ? <> · updated {d.now.slice(11)}</> : null}</p></div>
+        <div className="drange">
+          <label className="f">From<input type="date" value={from} max={istToday()} onChange={(e) => e.target.value && setRange(e.target.value, to < e.target.value ? e.target.value : to)} /></label>
+          <label className="f">To<input type="date" value={to} min={from} max={istToday()} onChange={(e) => e.target.value && setRange(from, e.target.value)} /></label>
+          {(from !== istToday() || to !== istToday()) && <button type="button" className="btn ghost sm" onClick={() => setRange(istToday(), istToday())}>Today</button>}
+        </div>
+      </div>
+      <div className="atabs" role="tablist">
+        <button type="button" role="tab" aria-selected={!tab} onClick={() => setTab("")}><Icon name="bolt" size={15} /> Workflows</button>
+        <button type="button" role="tab" aria-selected={tab === "contacts"} onClick={() => setTab("contacts")}><Icon name="phone" size={15} /> Contacts · Apollo + Treg</button>
+      </div>
+    </>
+  );
+  if (tab) return <>{header}<Contacts from={from} to={to} /></>;
+  if (loading && !d) return <>{header}<Loading /></>;
+  if (error) return <>{header}<ErrorBox error={error} retry={reload} /></>;
+  const w = d.totals;
   const pages = Math.max(1, Math.ceil(runs.length / PER));
   const pg = Math.min(page, pages - 1);
   const shown = runs.slice(pg * PER, pg * PER + PER);
@@ -78,14 +102,7 @@ export default function Automation({ query }) {
 
   return (
     <>
-      <div className="top">
-        <div><h1>Automation</h1><p>What the n8n workflows did {single ? "on" : "from"} <b>{range}</b> · updated {d.now.slice(11)}</p></div>
-        <div className="drange">
-          <label className="f">From<input type="date" value={from} max={istToday()} onChange={(e) => e.target.value && setRange(e.target.value, to < e.target.value ? e.target.value : to)} /></label>
-          <label className="f">To<input type="date" value={to} min={from} max={istToday()} onChange={(e) => e.target.value && setRange(from, e.target.value)} /></label>
-          {(from !== istToday() || to !== istToday()) && <button type="button" className="btn ghost sm" onClick={() => setRange(istToday(), istToday())}>Today</button>}
-        </div>
-      </div>
+      {header}
 
       <section className="kpis">
         <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs" value={fmt(w.runs)} sub={single ? "workflow runs that day" : `in ${d.days} days`} />
@@ -119,11 +136,12 @@ export default function Automation({ query }) {
                     <td><span className={"chip " + JOB_TONE[r.job]}>{r.job}</span></td>
                     <td><span className={"chip " + (ST[r.status] || ST.ok)[0]}>{(ST[r.status] || ST.ok)[1]}</span></td>
                     <td className="mono">{r.found || "-"}</td>
-                    <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.synced || "-"}</b>
+                    <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.job === "Apollo" ? r.matched : r.synced || "-"}</b>
+                      {r.job === "Apollo" ? <div className="small muted">{r.emails_added} emails</div> : null}
                       {r.job === "Scraping" && (r.new_sn || r.new_ai) ? <div className="small muted">{r.new_sn} SN · {r.new_ai} AI</div> : null}
                       {r.job === "Enrichment" && (r.emails_valid || r.emails_risky) ? <div className="small muted">{r.emails_valid} valid email</div> : null}</td>
                     <td className="mono">{r.rejected || 0}{r.duplicates ? <div className="small muted">{r.duplicates} dup</div> : null}</td>
-                    <td className="mono small">{money(r.cost)}</td>
+                    <td className="mono small">{r.job === "Apollo" ? `~${r.credits} cr` : money(r.cost)}</td>
                     <td className="small">{r.issues.length ? r.issues.map((x, k) => <div key={k} className="iss">⚠ {x}</div>) : <span className="muted">{r.result}</span>}</td>
                   </tr>))}</tbody></table>
             </div>

@@ -604,3 +604,30 @@ nav.side .nav:hover::after{display:none}
 .pbtns .btn{min-width:36px;justify-content:center}
 .pbtns .btn:disabled{opacity:.45;cursor:default}
 .runtbl td:first-child b{white-space:nowrap}
+/* automation: 4 job cards (Apollo added) */
+.jobs{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1280px){.jobs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.jobs{grid-template-columns:minmax(0,1fr)}}
+/* candidate: Apollo box */
+.apbox{margin-top:12px;border:1px solid var(--line, rgba(127,127,127,.18));border-radius:12px;padding:10px 12px;background:var(--warn-soft, rgba(217,119,6,.07))}
+.apbox .aph{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.apbox .aph b{font-size:13px}
+.apbox .apr{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px dashed var(--line, rgba(127,127,127,.18))}
+.apbox .apr span:first-child{color:var(--muted);flex:none}
+.apbox .apr span:last-child{text-align:right;min-width:0;overflow-wrap:anywhere}
+.jcard2 .jhead{align-items:center}
+.jcard2 .jwhat{margin:4px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
+.runtbl td:nth-child(7){white-space:nowrap}
+/* automation tabs */
+.atabs{display:flex;gap:4px;margin:4px 0 12px;border-bottom:1px solid var(--line, rgba(127,127,127,.18));overflow-x:auto}
+.atabs button{display:inline-flex;align-items:center;gap:7px;background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;font:inherit;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;margin-bottom:-1px}
+.atabs button[aria-selected="true"]{color:var(--brand);border-bottom-color:var(--brand)}
+.atabs button:hover{color:var(--text, inherit)}
+.jobs.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){.jobs.two{grid-template-columns:minmax(0,1fr)}}
+.jobs:not(.two){grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:1100px){.jobs:not(.two){grid-template-columns:minmax(0,1fr)}}
+.ctbl td{vertical-align:top}
+.ctbl .cval{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;overflow-wrap:anywhere}
+.chip.tiny{font-size:10px;padding:1px 6px}
+.apbox.treg{background:var(--info-soft, rgba(37,99,235,.07))}

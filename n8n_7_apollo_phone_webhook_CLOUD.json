@@ -1,0 +1,302 @@
+{
+  "name": "Apollo phone webhook (receives mobile numbers)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "apollo-phone-ziventra",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "fc604fbc-9498-4e80-a15d-1d2b3d0ca525",
+      "name": "Apollo phone webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "dfa1db68-fed9-40cc-ac3f-de33616721dd"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apollo ka phone number webhook -> sheet tab + MongoDB (8 credit per mobile)\nconst q = $input.first().json.query || {}, b = $input.first().json.body || {};\nconst people = b.people || (b.person ? [b.person] : []);\nconst nums = people.flatMap(p => p.phone_numbers || []).sort((x, y) => (y.type_cd === 'mobile') - (x.type_cd === 'mobile'));\nconst phone = nums[0] ? (nums[0].sanitized_number || nums[0].raw_number) : '';\nconst url = String(q.li || '');\nif (!url) return [];\nconst now = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');\nreturn [{ json: { _tab: q.tab === 'AI_ML' ? 'AI_ML' : 'ServiceNow', phone,\n  sheet: phone ? { linkedin_url: url, phone, phone_status: `Apollo (${nums[0].type_cd || 'phone'}, ${nums[0].confidence_cd || '-'})` } : null,\n  mongo: { linkedin_url: url.replace('://in.linkedin.com', '://www.linkedin.com').toLowerCase().replace(/\\/+$/, ''), apollo_phone: phone || 'not found', apollo_phone_at: now } } }];\n"
+      },
+      "id": "6235ba46-7002-4146-aef8-8d4438f7a8b4",
+      "name": "Read phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "3df7a2b5-f395-4195-b129-7220af23fd07",
+      "name": "ServiceNow sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "7e19b529-167c-40b3-a906-d8cc5e7ef462",
+      "name": "Update ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "46e854dd-60da-48c9-96a1-606b45f800b2",
+      "name": "AI_ML sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "22ecb1b9-5730-4ec1-b5b8-9b143c2102a5",
+      "name": "Update AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "31635719-9dc8-40d1-ab36-c9a159a7498c",
+      "name": "ServiceNow Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "853ec7b6-0be0-4f98-ab8e-e4b5b5f38e8d",
+      "name": "Save to ServiceNow MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "bed0b0e6-5b9e-4c92-a17b-9be4d22c289c",
+      "name": "AI_ML Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "options": {
+          "upsert": false
+        }
+      },
+      "id": "6e706d8e-415b-4dc4-a480-5e0f4d813b03",
+      "name": "Save to AI/ML MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Apollo phone webhook\nApollo mobile number thodi der baad (kuch minute) yahan bhejta hai.\nIs workflow ko Publish/Active karo, Production URL copy karke\nApollo workflow ke Pick candidates me PHONE_WEBHOOK me daalo.",
+        "width": 520,
+        "height": 220
+      },
+      "id": "24806801-7864-4933-9cb4-d26b89155bcf",
+      "name": "Note 2786",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Apollo phone webhook": {
+      "main": [
+        [
+          {
+            "node": "Read phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read phone": {
+      "main": [
+        [
+          {
+            "node": "ServiceNow sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ServiceNow Mongo row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML Mongo row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to ServiceNow MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to AI/ML MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "tags": []
+}

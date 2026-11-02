@@ -264,6 +264,24 @@ async def automation_page(request):
     return ok(await run_in_threadpool(build))
 
 
+async def contacts_page(request):
+    """Automation page, Contacts tab: Apollo phone + Treg email results for the chosen days."""
+    current_user(request)
+    today = dt.datetime.now(automation.IST).date()
+    def day(key, default):
+        v = request.query_params.get(key) or ""
+        return v if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) else default.isoformat()
+    start, end = day("from", today), day("to", today)
+    if (dt.date.fromisoformat(end) - dt.date.fromisoformat(start)).days > 90:
+        return err(400, "Choose at most 90 days")
+    def build():
+        st = S["store"]
+        lo = min(start, end, (today - dt.timedelta(days=7)).isoformat())
+        people = [v for v in S["cand"].all_views() if v.get("apollo_checked_at") or v.get("treg_checked_at")]
+        return automation.contacts(st.runs_since(lo), people, start, end)
+    return ok(await run_in_threadpool(build))
+
+
 # ---------- settings ----------
 async def health(request):
     return ok({"ok": True, "mode": config.DATA_MODE})
@@ -303,6 +321,7 @@ routes = [
     Route("/api/dashboard", dashboard),
     Route("/api/daily", daily),
     Route("/api/automation", automation_page),
+    Route("/api/contacts", contacts_page),
     Route("/api/candidates", candidates),
     Route("/api/candidates/export", export),
     Route("/api/candidates/{cid}", candidate, methods=["GET", "PATCH"]),

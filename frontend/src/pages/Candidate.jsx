@@ -39,6 +39,36 @@ function MissingBox({ c, onFill, editing }) {
   );
 }
 
+// What Apollo returned for this person (saved by the n8n Apollo workflow as apollo_* fields)
+function ApolloBox({ c }) {
+  const rows = [
+    ["Work email", c.apollo_email ? `${c.apollo_email} (${c.apollo_email_status === "verified" ? "verified" : c.apollo_email_status || "not verified"})` : "not found"],
+    ["Personal email", c.apollo_personal_email || "not found"],
+    ["Mobile", c.apollo_phone === "requested" ? "requested, arriving soon" : c.apollo_phone || "not found"],
+    ["Title / company", [c.apollo_title, c.apollo_company].filter(Boolean).join(" at ") || "-"],
+  ];
+  return (
+    <div className="apbox">
+      <div className="aph"><b>From Apollo</b><span className="small muted">{c.apollo_status === "Matched" ? "checked " + when(String(c.apollo_checked_at || "").slice(0, 10)) : c.apollo_status}</span></div>
+      {c.apollo_status === "Matched" ? rows.map(([k, v]) => <div key={k} className="apr"><span>{k}</span><span>{v}</span></div>)
+        : <div className="small muted">Apollo could not find this person.</div>}
+    </div>
+  );
+}
+
+// What Treg returned (work + personal email), saved by the n8n Treg workflow as treg_* fields
+function TregBox({ c }) {
+  return (
+    <div className="apbox treg">
+      <div className="aph"><b>From Treg</b><span className="small muted">checked {when(String(c.treg_checked_at || "").slice(0, 10))}</span></div>
+      {c.treg_status === "Error" ? <div className="small muted">Treg check failed; it will be tried again.</div> : <>
+        <div className="apr"><span>Work email</span><span>{c.treg_work_email ? `${c.treg_work_email} (${c.treg_work_verified === "yes" ? "verified" : "not verified"})` : "not found"}</span></div>
+        <div className="apr"><span>Personal email</span><span>{c.treg_personal_email || "not found"}</span></div>
+      </>}
+    </div>
+  );
+}
+
 export default function Candidate({ id, query }) {
   const toast = useToast();
   const data = useData();
@@ -148,6 +178,8 @@ export default function Candidate({ id, query }) {
               <div className="crow"><Icon name="bag" /><div className="grow">Open to work: <b>{str(c.open_to_work) || "Unknown"}</b></div></div>
             </div>
           )}
+          {!editing && c.apollo_status && <ApolloBox c={c} />}
+          {!editing && c.treg_status && <TregBox c={c} />}
           <div className="foot small muted">
             <div>Data status <b>{c.data_status}</b> is set by the automation.</div>
             <div>Last updated {when(c.updated_at)} by {c.updated_by}.</div>
