@@ -858,3 +858,5 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 [data-theme="dark"] .clogo:has(i){background:var(--soft);border-color:hsl(var(--h,230) 35% 34%)}
 [data-theme="dark"] .clogo i{color:hsl(var(--h,230) 75% 76%)}
 [data-theme="dark"] .clogo:has(img){background:#fff}
+/* tablet: keep Cards / Table toggle visible, table scrolls sideways */
+@media (max-width:760px){.vtoggle{display:inline-flex !important}.ptbl{overflow-x:auto}.ptbl table{min-width:760px}}

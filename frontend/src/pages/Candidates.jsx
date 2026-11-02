@@ -72,7 +72,8 @@ export default function Candidates({ query }) {
   const [F, setF] = useState(() => ({ ...DEFAULT, first_seen: query.get("first_seen") || "" }));
   const [viewPick, setView] = useState(() => store.get("cand_view", "cards"));
   const small = useSmall();
-  const view = small ? "cards" : viewPick; // phones always get cards
+  const phone = useSmall("(max-width: 560px)");
+  const view = phone ? "cards" : viewPick; // only phones always get cards; tablets can switch
   const [q, setQ] = useState(F.q);
 
   const dayParam = query.get("first_seen") || "";
@@ -181,7 +182,7 @@ export default function Candidates({ query }) {
           <select aria-label="Sort" style={{ width: "auto" }} value={F.sort} onChange={(e) => setF({ ...F, sort: e.target.value, dir: e.target.value === "name" ? "asc" : "desc", page: 1 })}>
             <option value="updated">Recently updated</option><option value="first_seen">Newest found</option><option value="score">Profile %</option>
             <option value="exp">Domain experience</option><option value="name">Name</option></select>
-          {!small && <div className="seg" role="group" aria-label="View">
+          {!phone && <div className="seg vtoggle" role="group" aria-label="View">
             {["cards", "table"].map((v) => <button key={v} type="button" aria-pressed={view === v} onClick={() => { setView(v); store.set("cand_view", v); setF({ ...F, page: 1 }); }}>{v === "cards" ? "Cards" : "Table"}</button>)}</div>}
         </div></div>
       {picked.size > 0 && (
