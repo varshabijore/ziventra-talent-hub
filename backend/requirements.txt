@@ -3,3 +3,4 @@ uvicorn[standard]>=0.32
 pymongo>=4.13
 PyJWT>=2.10
 pydantic>=2.12
+openpyxl>=3.1

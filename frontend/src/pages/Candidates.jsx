@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { api, qs } from "../api.js";
-import { Avatar, ErrorBox, Icon, Loading, PoolChip, StatusChip, fmt, tone, useSmall, useToast, when } from "../components/ui.jsx";
-import { useCached } from "../context/DataContext.jsx";
+import { useEffect, useState } from "react";
+import { qs } from "../api.js";
+import { ExportModal, ImportModal } from "../components/Transfer.jsx";
+import { Avatar, ErrorBox, Icon, Loading, PoolChip, StatusChip, fmt, tone, useSmall, when } from "../components/ui.jsx";
+import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 
 const DEFAULT = { q: "", pool: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "",
@@ -16,19 +17,41 @@ function Badge({ c }) {
   return <span role="link" tabIndex={0} className={"chip mono badge " + tone(c.percent)[1]} onClick={open} onKeyDown={(e) => e.key === "Enter" && open(e)} title="See what is missing">{c.percent}%</span>;
 }
 
-function Card({ c }) {
+// company icon from its website (favicon); initials when we don't know the website or the icon fails
+function CompanyLogo({ c }) {
+  const [bad, setBad] = useState(false);
+  if (!c.current_company) return null;
+  const ini = String(c.current_company).replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
   return (
-    <a className="card" href={href(c.id)}>
+    <span className="clogo" title={c.current_company}>
+      {c.company_domain && !bad ? <img src={`https://www.google.com/s2/favicons?domain=${c.company_domain}&sz=64`} alt="" loading="lazy" onError={() => setBad(true)} /> : <i>{ini}</i>}
+    </span>
+  );
+}
+
+const exp = (c) => {
+  const t = c.total_experience_years, d = c.domain_experience_years;
+  if (t == null && d == null) return null;
+  return [t != null && `${t} yrs total`, d != null && `${d} yrs ${c.pool}`].filter(Boolean).join(" · ");
+};
+
+function Card({ c, picked, onPick }) {
+  const Line = ({ icon, v, empty }) => <div className={"cline" + (v ? "" : " none")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
+  return (
+    <a className={"card ccard" + (picked ? " picked" : "")} href={href(c.id)}>
+      <label className="pick" onClick={(e) => e.stopPropagation()} title="Select">
+        <input type="checkbox" checked={picked} onChange={(e) => onPick(c.id, e.target.checked)} onClick={(e) => e.stopPropagation()} aria-label={"Select " + c.name} /></label>
       <div className="head"><Avatar c={c} />
         <div style={{ minWidth: 0, flex: 1 }}><div className="name">{c.name}</div>
-          <div className="role">{c.current_title || c.standard_title || "Title missing"}{c.current_company ? " · " + c.current_company : ""}</div></div>
-        <Badge c={c} /></div>
-      <div className="meta">
-        {c.city && <span><Icon name="pin" />{c.city}</span>}
-        {c.domain_experience_years != null && <span><Icon name="bag" />{c.domain_experience_years} yrs {c.pool}</span>}
-        {c.certifications && <span><Icon name="cert" />{String(c.certifications).split(";")[0]}</span>}
-        {c.has_email && <span title="Email found"><Icon name="mail" /></span>}
-        {c.has_phone && <span title="Phone found"><Icon name="phone" /></span>}
+          <div className="role">{c.current_title || c.standard_title || "Title missing"}</div></div>
+        <div className="hright"><Badge c={c} /><CompanyLogo c={c} /></div></div>
+      <div className="clines">
+        <Line icon="building" v={c.current_company} empty="Company not added" />
+        <Line icon="bag" v={exp(c)} empty="Experience not added" />
+        <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" />
+        <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" />
+        <Line icon="mail" v={c.email} empty="Email not found" />
+        <Line icon="phone" v={c.phone} empty="Phone not found" />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
       <div className="upd">Updated {when(c.updated_at)} · by {c.updated_by}</div>
@@ -37,7 +60,7 @@ function Card({ c }) {
 }
 
 export default function Candidates({ query }) {
-  const toast = useToast();
+  const data = useData();
   const [F, setF] = useState(() => ({ ...DEFAULT, first_seen: query.get("first_seen") || "" }));
   const [viewPick, setView] = useState(() => store.get("cand_view", "cards"));
   const small = useSmall();
@@ -51,17 +74,13 @@ export default function Candidates({ query }) {
 
   const { data: r, error, reload } = useCached("/candidates" + qs({ ...F, size: view === "table" ? 25 : small ? 6 : 12 }), { keep: true });
   const set = (k, v) => setF((f) => ({ ...f, [k]: v, page: 1 }));
-  const reset = () => { setQ(""); setF({ ...DEFAULT }); if (query.get("first_seen")) go("/candidates"); };
-  const exportCsv = async () => {
-    try {
-      const res = await api("/candidates/export" + qs({ ...F, page: "" }), { raw: true });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(await res.blob());
-      a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      toast("Download started");
-    } catch (ex) { toast(ex.message, true); }
-  };
+  const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (query.get("first_seen")) go("/candidates"); };
+  const [picked, setPicked] = useState(() => new Set());
+  const [modal, setModal] = useState("");
+  const pick = (id, on) => setPicked((p) => { const n = new Set(p); on ? n.add(id) : n.delete(id); return n; });
+  const pageIds = r ? r.items.map((c) => c.id) : [];
+  const allOnPage = pageIds.length > 0 && pageIds.every((id) => picked.has(id));
+  const pickPage = (on) => setPicked((p) => { const n = new Set(p); pageIds.forEach((id) => (on ? n.add(id) : n.delete(id))); return n; });
 
   if (error && !r) return <ErrorBox error={error} retry={reload} />;
   if (!r) return <Loading />;
@@ -77,7 +96,12 @@ export default function Candidates({ query }) {
   return (
     <>
       <div className="top"><div><h1>Candidates</h1><p>{fmt(s.total)} candidates match your filters</p></div>
-        <button className="btn" type="button" onClick={exportCsv}><Icon name="download" /> Download CSV</button></div>
+        <div className="tbtns">
+          <button className="btn icon" type="button" onClick={() => setModal("import")} title="Import from CSV / Excel" aria-label="Import from CSV or Excel"><Icon name="upload" /><span>Import</span></button>
+          <button className="btn icon" type="button" onClick={() => setModal("export")} title="Export to CSV / Excel" aria-label="Export to CSV or Excel"><Icon name="download" /><span>Export</span></button>
+        </div></div>
+      {modal === "export" && <ExportModal selected={[...picked]} total={s.total} filters={F} onClose={() => setModal("")} />}
+      {modal === "import" && <ImportModal onClose={() => setModal("")} onDone={() => { data.invalidate("/candidates?", "/dashboard", "/daily"); reload(); }} />}
       <section className="kpis mini">
         <K hl l="Candidates" v={fmt(s.total)} sub={s.total === s.pool_total ? (F.pool ? F.pool + " only" : "all pools") : `of ${fmt(s.pool_total)} in ${F.pool || "pool"}`} />
         <K l={`In a ${F.pool || "matching"} role`} v={fmt(s.in_role)} sub="current title matches" />
@@ -109,15 +133,23 @@ export default function Candidates({ query }) {
           {!small && <div className="seg" role="group" aria-label="View">
             {["cards", "table"].map((v) => <button key={v} type="button" aria-pressed={view === v} onClick={() => { setView(v); store.set("cand_view", v); setF({ ...F, page: 1 }); }}>{v === "cards" ? "Cards" : "Table"}</button>)}</div>}
         </div></div>
+      {picked.size > 0 && (
+        <div className="selbar">
+          <b>{fmt(picked.size)} selected</b>
+          {!allOnPage && <button type="button" className="linkbtn" onClick={() => pickPage(true)}>Select all {r.items.length} on this page</button>}
+          <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Clear</button>
+          <button type="button" className="btn primary sm" onClick={() => setModal("export")}><Icon name="download" /> Export selected</button>
+        </div>)}
       {!r.items.length ? <div className="panel empty">No candidates match these filters. <button className="btn sm" type="button" onClick={reset}>Reset filters</button></div>
-        : view === "cards" ? <div className="cards">{r.items.map((c) => <Card key={c.id} c={c} />)}</div>
-        : <div className="panel tbl" style={{ padding: "6px 12px" }}><table><thead><tr><th>Name</th><th>Pool</th><th>Current role</th><th>City</th><th>Exp</th><th>Data status</th><th>Contact</th><th>Profile</th><th>Updated</th></tr></thead><tbody>
+        : view === "cards" ? <div className="cards">{r.items.map((c) => <Card key={c.id} c={c} picked={picked.has(c.id)} onPick={pick} />)}</div>
+        : <div className="panel tbl" style={{ padding: "6px 12px" }}><table><thead><tr><th className="pickc"><input type="checkbox" checked={allOnPage} onChange={(e) => pickPage(e.target.checked)} aria-label="Select all on this page" /></th><th>Name</th><th>Pool</th><th>Current role</th><th>City</th><th>Exp</th><th>Data status</th><th>Contact</th><th>Profile</th><th>Updated</th></tr></thead><tbody>
           {r.items.map((c) => (
-            <tr key={c.id} className="click" onClick={(e) => { if (!e.target.closest("button,.badge")) go(href(c.id)); }}>
+            <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
+              <td className="pickc"><input type="checkbox" checked={picked.has(c.id)} onChange={(e) => pick(c.id, e.target.checked)} aria-label={"Select " + c.name} /></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
               <td>{c.current_title}<div className="small muted">{c.current_company}</div></td><td>{c.city}</td>
               <td className="mono">{c.domain_experience_years ?? "-"}</td><td><StatusChip status={c.data_status} /></td>
-              <td className="muted">{c.has_email && <span title="Email found"><Icon name="mail" size={15} /></span>} {c.has_phone && <span title="Phone found"><Icon name="phone" size={15} /></span>}{!c.has_email && !c.has_phone && "-"}</td>
+              <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>
           ))}</tbody></table></div>}
       {r.pages > 1 && <div className="pager">

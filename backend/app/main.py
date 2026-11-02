@@ -14,7 +14,7 @@ from starlette.routing import Route
 
 from . import config, scoring, security
 from .candidates import Candidates, today_ist
-from . import automation
+from . import automation, transfer
 from .store import make_store, now
 
 EMAIL_RX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -213,18 +213,66 @@ async def candidates(request):
 
 
 async def export(request):
+    """GET: all candidates matching the filters (CSV). POST {ids?, filters?, format: csv|xlsx, contact: bool}: chosen ones."""
     u = current_user(request)
-    rows = await run_in_threadpool(S["cand"].export_rows, dict(request.query_params), u["id"])
-    cols = ["pool", "name", "linkedin_url", "current_title", "current_company", "city", "standard_title", "domain_experience_years",
-            "total_experience_years", "certifications", "open_to_work", "data_status", "percent", "has_email", "has_phone", "updated_at"]
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(cols)
-    for r in rows:
-        w.writerow([r.get(c, "") for c in cols])
-    log(request, u, "export", f"{len(rows)} rows")
-    return Response("﻿" + buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="candidates-{today_ist()}.csv"'})
+    c = S["cand"]
+    if request.method == "POST":
+        try:
+            data = await request.json() or {}
+        except Exception:
+            raise HTTPException(400, "Send JSON")
+        fmt = "xlsx" if data.get("format") == "xlsx" else "csv"
+        ids = [str(x) for x in (data.get("ids") or [])][:20000]
+        filters = {k: str(v) for k, v in (data.get("filters") or {}).items() if v not in (None, "", False)}
+        filters.update({k: "1" for k, v in (data.get("filters") or {}).items() if v is True})
+        rows = await run_in_threadpool(c.export_by_ids, ids, u["id"]) if ids else await run_in_threadpool(c.export_by_filter, filters, u["id"])
+        contact = data.get("contact", True) is not False
+    else:
+        fmt, contact = ("xlsx" if request.query_params.get("format") == "xlsx" else "csv"), True
+        rows = await run_in_threadpool(c.export_by_filter, dict(request.query_params), u["id"])
+    payload, mime = transfer.export_file(rows, fmt, contact)
+    log(request, u, "export", f"{len(rows)} rows ({fmt})")
+    return Response(payload, media_type=mime,
+                    headers={"Content-Disposition": f'attachment; filename="candidates-{today_ist()}.{fmt}"', "X-Rows": str(len(rows)),
+                             "Access-Control-Expose-Headers": "Content-Disposition, X-Rows"})
+
+
+async def import_candidates(request):
+    """POST {filename, data (base64), pool, mode: fill|overwrite|skip, mapping?, commit: bool}.
+    Without commit: checks the file and returns the column mapping, counts and problems. With commit: saves."""
+    u = current_user(request)
+    try:
+        data = await request.json() or {}
+    except Exception:
+        raise HTTPException(400, "Send JSON")
+    try:
+        headers, rows = await run_in_threadpool(transfer.read_file, data.get("filename"), str(data.get("data") or ""))
+    except ValueError as e:
+        return err(400, str(e))
+    except Exception:
+        return err(400, "Could not read this file. Save it as .csv or .xlsx and try again.")
+    guessed = transfer.guess_mapping(headers)
+    mapping = {h: (data.get("mapping") or {}).get(h, guessed[h]) for h in headers}
+    mapping = {h: (f if f in transfer.FIELD_LABELS else "") for h, f in mapping.items()}
+    pool = data.get("pool") if data.get("pool") in ("ServiceNow", "AI/ML") else ""
+    mode = data.get("mode") if data.get("mode") in ("fill", "overwrite", "skip") else "fill"
+    commit = bool(data.get("commit"))
+    if commit:
+        missing = [f for f in ("name", "linkedin_url") if f not in mapping.values()]
+        if missing:
+            return err(400, "Map these columns first: " + ", ".join(transfer.FIELD_LABELS[f] for f in missing))
+    res = await run_in_threadpool(S["cand"].import_rows, rows, mapping, pool, mode, u, commit)
+    res.update({"headers": headers, "mapping": mapping, "fields": transfer.FIELD_LABELS,
+                "samples": {h: next((r.get(h) for r in rows if r.get(h)), "") for h in headers}})
+    if commit:
+        log(request, u, "import", f"{data.get('filename')}: {res.get('added', 0)} added, {res.get('updated', 0)} updated, {len(res['errors'])} errors")
+    return ok(res)
+
+
+async def import_template(request):
+    current_user(request)
+    return Response(transfer.template_csv(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="candidates-import-template.csv"'})
 
 
 async def candidate(request):
@@ -323,7 +371,9 @@ routes = [
     Route("/api/automation", automation_page),
     Route("/api/contacts", contacts_page),
     Route("/api/candidates", candidates),
-    Route("/api/candidates/export", export),
+    Route("/api/candidates/export", export, methods=["GET", "POST"]),
+    Route("/api/candidates/import", import_candidates, methods=["POST"]),
+    Route("/api/candidates/import/template", import_template),
     Route("/api/candidates/{cid}", candidate, methods=["GET", "PATCH"]),
 ]
 

@@ -2,7 +2,7 @@
 Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`, which n8n never touches,
 and the screen always shows the manual value when there is one."""
 import datetime as dt, threading, time
-from . import automation, config, scoring
+from . import automation, config, scoring, transfer
 from .store import POOLS, now
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -143,8 +143,15 @@ class Candidates:
                 "certifications", "open_to_work", "data_status", "percent", "updated_at", "updated_by",
                 "first_seen", "source_flow"]
         out = {k: v.get(k) for k in keys}
-        out["has_email"] = scoring.has_value("email", v.get("email"))
-        out["has_phone"] = scoring.has_value("phone", v.get("phone"))
+        # contact shown on the card: the candidate's own value, else what Apollo / Treg found (before the next sheet sync)
+        email = v.get("email") if scoring.has_value("email", v.get("email")) else \
+            next((x for x in (v.get("treg_personal_email"), v.get("treg_work_email"), v.get("apollo_personal_email"), v.get("apollo_email")) if x), "")
+        ap = str(v.get("apollo_phone") or "")
+        phone = v.get("phone") if scoring.has_value("phone", v.get("phone")) else (ap if ap[:1] in "+0123456789" and ap[:1] else "")
+        out["email"], out["phone"] = email or "", phone or ""
+        out["has_email"] = bool(email)
+        out["has_phone"] = bool(phone)
+        out["company_domain"] = transfer.company_domain(v.get("current_company"), v.get("company_website"))
         return out
 
     def all_views(self, user_id=None):
@@ -235,6 +242,100 @@ class Candidates:
                 break
             page += 1
         return out
+
+    def export_by_ids(self, ids, user_id):
+        """Full rows for the chosen candidates (export of a selection)."""
+        docs, fields = self.docs(), self.fields()
+        out = []
+        for cid in ids:
+            d = docs.get(cid)
+            if d:
+                out.append(self._export_row(self.view(cid, d, fields)))
+        return out
+
+    def export_by_filter(self, p, user_id):
+        ids = [r["id"] for r in self.export_rows(p, user_id)]
+        return self.export_by_ids(ids, user_id)
+
+    def _export_row(self, v):
+        r = dict(v)
+        lt = self.light(v)
+        r["email"], r["phone"] = lt["email"], lt["phone"]
+        return r
+
+    # ---------- import (CSV / Excel) ----------
+    def import_rows(self, rows, mapping, default_pool, mode, user, commit=False):
+        """mode: 'fill' = add only empty fields of existing candidates, 'overwrite' = replace them, 'skip' = leave them.
+        Returns counts, row errors and a short preview; with commit=True it also saves."""
+        docs = self.docs()
+        by_url = {}
+        for cid, d in docs.items():
+            u = transfer.clean_url((d.get("manual") or {}).get("linkedin_url") or d.get("linkedin_url"))
+            if u:
+                by_url.setdefault(u, cid)
+        fields = self.fields()
+        allowed = {f["key"] for f in fields if not f.get("custom")} | {f["key"] for f in scoring.EXTRA_EDITABLE}
+        res = {"total": len(rows), "new": 0, "update": 0, "same": 0, "skip": 0, "errors": [], "preview": []}
+        seen = set()
+        plan = []
+        for i, row in enumerate(rows, start=2):           # row 1 = headers
+            data, error = transfer.clean_row(row, mapping, default_pool)
+            if not error and data["linkedin_url"] in seen:
+                error = "Same LinkedIn URL appears again in this file"
+            if error:
+                res["errors"].append({"row": i, "name": data.get("name") or "", "error": error})
+                continue
+            seen.add(data["linkedin_url"])
+            cid = by_url.get(data["linkedin_url"])
+            if not cid and data["pool"] not in ("ServiceNow", "AI/ML"):
+                res["errors"].append({"row": i, "name": data.get("name") or "", "error": "Pool missing: add a Pool column (ServiceNow / AI/ML) or choose a default pool"})
+                continue
+            if cid:
+                data["pool"] = docs[cid].get("pool") or POOLS[docs[cid]["_pool"]]
+            if not cid:
+                res["new"] += 1
+                plan.append(("new", None, data))
+                kind = "New"
+            elif mode == "skip":
+                res["skip"] += 1
+                kind = "Already exists (skipped)"
+            else:
+                cur = self.view(cid, docs[cid], fields)
+                ch = {k: v for k, v in data.items() if k in allowed and k not in ("linkedin_url", "pool", "name")
+                      and str(cur.get(k) if cur.get(k) is not None else "") != str(v)
+                      and (mode == "overwrite" or not scoring.has_value(k, cur.get(k)))}
+                if ch:
+                    res["update"] += 1
+                    plan.append(("update", cid, ch))
+                    kind = f"Update {len(ch)} field(s)"
+                else:
+                    res["same"] += 1
+                    kind = "No change"
+            if len(res["preview"]) < 8:
+                res["preview"].append({"row": i, "name": data["name"], "pool": data["pool"], "linkedin_url": data["linkedin_url"],
+                                       "email": data.get("email", ""), "phone": data.get("phone", ""), "result": kind})
+        res["errors"] = res["errors"][:200]
+        if not commit:
+            return res
+        added = updated = 0
+        stamp, day = now(), today_ist()
+        for kind, cid, data in plan:
+            if kind == "update":
+                r = self.update_fields(cid, {k: (str(v) if not isinstance(v, (int, float)) else v) for k, v in data.items()}, user)
+                updated += 1 if r.get("ok") else 0
+                continue
+            pool_key = next(k for k, v in POOLS.items() if v == data["pool"])
+            manual = {k: v for k, v in data.items() if k in allowed or k == "name"}
+            doc = {"pool": data["pool"], "name": data["name"], "linkedin_url": data["linkedin_url"], "readiness": "Discovered",
+                   "source": "Imported file", "source_flow": "import (website)", "first_seen": day, "last_updated": day,
+                   "manual": manual, "app_updated_at": stamp, "app_updated_by": user["name"], "app_updated_by_id": user["id"]}
+            new_id = self.store.candidate_insert(pool_key, doc)
+            self.store.audit_add({"cand": f"{pool_key}:{new_id}", "at": stamp, "by": user["id"], "by_name": user["name"], "field": "*",
+                                  "old": None, "new": None, "text": "Candidate imported from a file"})
+            added += 1
+        self.invalidate()
+        res.update({"added": added, "updated": updated, "done": True})
+        return res
 
     # ---------- one candidate ----------
     def get(self, cid, user_id):

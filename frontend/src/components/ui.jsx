@@ -35,6 +35,9 @@ const paths = {
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
   download: <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />,
+  upload: <path d="M12 15V3M7 8l5-5 5 5M4 21h16" />,
+  file: <><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></>,
+  building: <><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10 21v-3h4v3" /></>,
   link: <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />,
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
   panel: <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></>,
@@ -120,13 +123,13 @@ export function Ring({ percent, big }) {
 }
 
 // ---------- modal ----------
-export function Modal({ onClose, children }) {
+export function Modal({ onClose, children, wide }) {
   useEffect(() => {
     const esc = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [onClose]);
-  return <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className="modal" role="dialog" aria-modal="true">{children}</div></div>;
+  return <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true">{children}</div></div>;
 }
 
 // ---------- charts ----------

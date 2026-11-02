@@ -26,7 +26,7 @@ export function useRoute() {
     // normal <a href="/..."> links open inside the app instead of reloading the page
     const click = (e) => {
       const a = e.target.closest("a[href]");
-      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target || a.origin !== location.origin) return;
+      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target || a.hasAttribute("download") || a.protocol === "blob:" || a.origin !== location.origin) return;
       e.preventDefault();
       go(a.pathname + a.search + a.hash);
     };
