@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BarChart, ErrorBox, HBars, Icon, Kpi, Loading, fmt, useSmall } from "../components/ui.jsx";
+import { ErrorBox, Icon, Kpi, Loading, fmt, useSmall } from "../components/ui.jsx";
 import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
@@ -70,6 +70,7 @@ export default function Automation({ query }) {
   const range = single ? (d.start === d.today ? "today" : nice(d.start)) : `${nice(d.start)} – ${nice(d.end)}`;
   const shown = small && !all ? runs.slice(0, 5) : runs;
   const issueCount = d.errors.length + d.missed.length + d.issues.length;
+  const skipped = Object.values(w.reasons || {}).reduce((a, b) => a + b, 0);
   const reasons = Object.entries(w.reasons || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: REASON[k] || k, value: v }));
 
   return (
@@ -107,7 +108,7 @@ export default function Automation({ query }) {
             </div>
           </div>
           {runs.length ? (
-            <div className="tbl scroll" style={{ "--h": "calc(100vh - 330px)" }}>
+            <div className="tbl scroll" style={{ "--h": "max(560px, calc(100vh - 200px))" }}>
               <table className="runtbl"><thead><tr><th>When</th><th>Job</th><th>Status</th><th>Found</th><th>Added</th><th>Rejected</th><th>Cost</th><th>Details</th></tr></thead>
                 <tbody>{shown.map((r, i) => (
                   <tr key={r.run_at + r.job + i}>
@@ -141,11 +142,13 @@ export default function Automation({ query }) {
               {!issueCount && <div className="mbox done"><Icon name="check" size={14} /> All runs healthy</div>}
             </div>
           </section>
-          <section className="panel"><h2>Per day</h2><p className="sub">New candidates and enriched profiles</p>
-            <BarChart rows={d.series.map((r) => ({ ...r, label: short(r.date) }))} width={520} height={140} every={d.days > 14 ? 5 : d.days > 7 ? 2 : 1}
-              series={[{ key: "new", name: "Scraped (new)", color: "var(--brand)" }, { key: "enriched", name: "Enriched", color: "var(--sn)" }]} /></section>
-          <section className="panel"><h2>Why profiles were skipped</h2><p className="sub">Scraping results that were not added</p>
-            {reasons.length ? <HBars items={reasons} color="var(--warn)" /> : <div className="small muted">No data</div>}</section>
+          <section className="panel"><h2>Why profiles were skipped</h2>
+            <p className="sub">{skipped ? `${fmt(skipped)} search results were not added` : "Scraping results that were not added"}</p>
+            {reasons.length ? <div className="skips">{reasons.map((r) => (
+              <div key={r.label} className="skip">
+                <div className="skiptop"><span>{r.label}</span><b className="mono">{fmt(r.value)}<small> · {Math.round((100 * r.value) / skipped)}%</small></b></div>
+                <div className="skipbar"><i style={{ width: Math.max(3, (100 * r.value) / skipped) + "%" }} /></div>
+              </div>))}</div> : <div className="small muted">No data</div>}</section>
         </div>
       </div>
     </>
