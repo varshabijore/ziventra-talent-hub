@@ -809,3 +809,10 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .clogo.nocomp{background:#fff7ed;border:1px solid #fed7aa;color:#ea580c}
 .clogo.nocomp svg{width:55%;height:55%;opacity:1;stroke-width:2}
 [data-theme="dark"] .clogo.nocomp{background:rgba(234,88,12,.16);border-color:rgba(251,146,60,.35);color:#fb923c}
+/* ===== v6: card line icons plain black + bold like the text, bigger % ===== */
+.cline .cic2,.cline.ic-building .cic2,.cline.ic-pin .cic2,.cline.ic-cert .cic2{background:none;width:18px;height:18px;border-radius:0;color:var(--ink,#1b1f3b)}
+[data-theme="dark"] .cline.ic-pin .cic2,[data-theme="dark"] .cline.ic-cert .cic2{background:none;color:var(--ink,#e8eaf6)}
+.cline .cic2 svg{width:16px;height:16px;stroke-width:2.3}
+.cline.none .cic2{background:none;color:var(--muted);opacity:.6}
+.cline.none .cic2 svg{stroke-width:1.8}
+.ccard .badge{font-size:15px;font-weight:800;padding:2px 0}
