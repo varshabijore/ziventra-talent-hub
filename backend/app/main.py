@@ -14,6 +14,7 @@ from starlette.routing import Route
 
 from . import config, scoring, security
 from .candidates import Candidates, today_ist
+from . import automation
 from .store import make_store, now
 
 EMAIL_RX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -247,6 +248,19 @@ async def candidate(request):
     return ok(v)
 
 
+async def automation_page(request):
+    current_user(request)
+    try:
+        days = min(max(int(request.query_params.get("days") or 7), 1), 60)
+    except ValueError:
+        days = 7
+    def build():
+        since = (dt.datetime.now(automation.IST).date() - dt.timedelta(days=days - 1)).isoformat()
+        st = S["store"]
+        return automation.report(st.runs_since(since), st.errors_since(since), days)
+    return ok(await run_in_threadpool(build))
+
+
 # ---------- settings ----------
 async def health(request):
     return ok({"ok": True, "mode": config.DATA_MODE})
@@ -285,6 +299,7 @@ routes = [
     Route("/api/auth/password", change_password, methods=["POST"]),
     Route("/api/dashboard", dashboard),
     Route("/api/daily", daily),
+    Route("/api/automation", automation_page),
     Route("/api/candidates", candidates),
     Route("/api/candidates/export", export),
     Route("/api/candidates/{cid}", candidate, methods=["GET", "PATCH"]),

@@ -52,8 +52,16 @@ def seed(st):
         else:
             doc["experience_bucket"] = "Unknown"
         st.candidate_insert(pool, doc)
+    # demo run log: the real n8n runs from the sheet, moved so the last day is today
+    import datetime as _dt
+    from .run_seed import RUNS
+    last = _dt.date.fromisoformat(RUNS[-1]["date"])
+    shift = today - last
+    for r in RUNS:
+        d = (_dt.date.fromisoformat(r["date"]) + shift).isoformat()
+        st._runs.append({**r, "date": d, "run_at": d + " " + r["time"]})
     t = today.isoformat()
-    for tm, kind, res, cost in [("10:12", "Scraping", "44 new (26 ServiceNow + 18 AI/ML)", 0.02), ("11:41", "Enrichment", "25 enriched, 0 rejected", 0.25),
-                                ("13:12", "Scraping", "52 new (31 ServiceNow + 21 AI/ML)", 0.07), ("15:41", "Refresh", "25 checked, 3 changed", 0.10),
-                                ("16:12", "Scraping", "57 new (29 ServiceNow + 28 AI/ML)", 0.07)]:
-        st._runs.append({"date": t, "time": tm, "job": kind, "by": "n8n", "result": res, "cost": cost})
+    st._runs.append({"run_at": t + " 15:41", "date": t, "time": "15:41", "flow": "n8n (refresh)", "added": "", "cost": 0.1,
+                     "notes": "25 checked, 3 changed. Actor harvestapi/linkedin-profile-scraper."})
+    st._errors = [{"at": t + "T13:13:05", "workflow": "Candidate scraping - ServiceNow + AI_ML (Google Sheet) (Cloud)",
+                   "node": "Apify Google search", "message": "Request failed with status code 402 (demo error)", "url": ""}]

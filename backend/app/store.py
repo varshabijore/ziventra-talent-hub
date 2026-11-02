@@ -19,6 +19,7 @@ class MongoStore:
         ai = MongoClient(config.AI_MONGODB_URI, serverSelectionTimeoutMS=10000) if config.AI_MONGODB_URI else sn
         self.cand = {"sn": sn[config.SN_DB][config.CANDIDATE_COLLECTION], "ai": ai[config.AI_DB][config.CANDIDATE_COLLECTION]}
         db = sn[config.APP_DB]
+        self.db = db
         self.users, self.activity, self.audit = db.users, db.activity, db.audit
         self.settings, self.bookmarks, self.runs = db.settings, db.bookmarks, db.runs
         self.users.create_index([("email", ASCENDING)], unique=True)
@@ -75,7 +76,14 @@ class MongoStore:
         return True
 
     # runs (optional: n8n can log each run here)
-    def runs_on(self, day): return [{k: v for k, v in d.items() if k != "_id"} for d in self.runs.find({"date": day}).sort("time", 1)]
+    def runs_on(self, day):
+        q = {"$or": [{"date": day}, {"run_at": {"$regex": "^" + day}}]}
+        return [{k: v for k, v in d.items() if k != "_id"} for d in self.runs.find(q)]
+    def runs_since(self, day):
+        q = {"$or": [{"date": {"$gte": day}}, {"run_at": {"$gte": day}}]}
+        return [{k: v for k, v in d.items() if k != "_id"} for d in self.runs.find(q).limit(2000)]
+    def errors_since(self, day):
+        return [{k: v for k, v in d.items() if k != "_id"} for d in self.db.n8n_errors.find({"at": {"$gte": day}}).limit(500)]
 
     # candidates
     def candidates(self, pool):
@@ -132,7 +140,9 @@ class MemoryStore:
         self._bm.add((uid, cand))
         return True
 
-    def runs_on(self, day): return copy.deepcopy([r for r in self._runs if r.get("date") == day])
+    def runs_on(self, day): return copy.deepcopy([r for r in self._runs if (r.get("date") or str(r.get("run_at", ""))[:10]) == day])
+    def runs_since(self, day): return copy.deepcopy([r for r in self._runs if (r.get("date") or str(r.get("run_at", ""))[:10]) >= day])
+    def errors_since(self, day): return copy.deepcopy([e for e in getattr(self, "_errors", []) if str(e.get("at", "")) >= day])
 
     def candidates(self, pool): return copy.deepcopy(list(self._cand[pool].values()))
     def candidate_set(self, pool, cid, fields):

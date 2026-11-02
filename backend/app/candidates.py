@@ -2,7 +2,7 @@
 Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`, which n8n never touches,
 and the screen always shows the manual value when there is one."""
 import datetime as dt, threading, time
-from . import config, scoring
+from . import automation, config, scoring
 from .store import POOLS, now
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -437,5 +437,5 @@ class Candidates:
         }
         for k in lists:
             lists[k] = sorted(lists[k], key=lambda x: (x["pool"], -(x.get("percent") or 0)))[:500]
-        return {"day": day, "summary": today, "series": [counts(d) for d in span], "runs": self.store.runs_on(day),
+        return {"day": day, "summary": today, "series": [counts(d) for d in span], "runs": sorted((automation.parse(r) for r in self.store.runs_on(day)), key=lambda r: r["time"]),
                 "changes": changes, "added": added, "lists": lists}

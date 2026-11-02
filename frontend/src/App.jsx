@@ -10,9 +10,10 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Candidates from "./pages/Candidates.jsx";
 import Candidate from "./pages/Candidate.jsx";
 import Daily from "./pages/Daily.jsx";
+import Automation from "./pages/Automation.jsx";
 
-const NAV = [["dashboard", "Dashboard", "home"], ["candidates", "Candidates", "users"], ["daily", "Daily record", "cal"]];
-const TITLES = { dashboard: "Dashboard", candidates: "Candidates", candidate: "Candidate", daily: "Daily record", login: "Sign in" };
+const NAV = [["dashboard", "Dashboard", "home"], ["candidates", "Candidates", "users"], ["daily", "Daily record", "cal"], ["automation", "Automation", "bolt"]];
+const TITLES = { dashboard: "Dashboard", candidates: "Candidates", candidate: "Candidate", daily: "Daily record", automation: "Automation", login: "Sign in" };
 
 function currentTheme() {
   return document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -177,6 +178,7 @@ function Routes() {
     candidates: <Candidates query={route.query} />,
     candidate: <Candidate id={route.id} query={route.query} />,
     daily: <Daily query={route.query} />,
+    automation: <Automation query={route.query} />,
   }[route.name];
   return <Shell route={route}>{page || <NotFound signedIn />}</Shell>;
 }
