@@ -29,12 +29,6 @@ function CompanyLogo({ c }) {
   );
 }
 
-const exp = (c) => {
-  const t = c.total_experience_years, d = c.domain_experience_years;
-  if (t == null && d == null) return null;
-  return [t != null && `${t} yrs total`, d != null && `${d} yrs ${c.pool}`].filter(Boolean).join(" · ");
-};
-
 function Card({ c, picked, onPick }) {
   const Line = ({ icon, v, empty }) => <div className={"cline" + (v ? "" : " none")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
   return (
@@ -45,13 +39,16 @@ function Card({ c, picked, onPick }) {
         <div style={{ minWidth: 0, flex: 1 }}><div className="name">{c.name}</div>
           <div className="role">{c.current_title || c.standard_title || "Title missing"}</div></div>
         <div className="hright"><Badge c={c} /><CompanyLogo c={c} /></div></div>
+      {c.total_experience_years != null || c.domain_experience_years != null ? (
+        <div className="cexp">
+          <div><b>{c.domain_experience_years ?? "–"}<small> yrs</small></b><span>{c.pool} exp</span></div>
+          <div><b>{c.total_experience_years ?? "–"}<small> yrs</small></b><span>Total exp</span></div>
+        </div>
+      ) : <div className="cexp none"><span>Experience not added yet</span></div>}
       <div className="clines">
         <Line icon="building" v={c.current_company} empty="Company not added" />
-        <Line icon="bag" v={exp(c)} empty="Experience not added" />
         <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" />
         <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" />
-        <Line icon="mail" v={c.email} empty="Email not found" />
-        <Line icon="phone" v={c.phone} empty="Phone not found" />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
       <div className="upd">Updated {when(c.updated_at)} · by {c.updated_by}</div>
@@ -97,8 +94,8 @@ export default function Candidates({ query }) {
     <>
       <div className="top"><div><h1>Candidates</h1><p>{fmt(s.total)} candidates match your filters</p></div>
         <div className="tbtns">
-          <button className="btn icon" type="button" onClick={() => setModal("import")} title="Import from CSV / Excel" aria-label="Import from CSV or Excel"><Icon name="upload" /><span>Import</span></button>
-          <button className="btn icon" type="button" onClick={() => setModal("export")} title="Export to CSV / Excel" aria-label="Export to CSV or Excel"><Icon name="download" /><span>Export</span></button>
+          <button className="btn icon" type="button" onClick={() => setModal("import")} title="Import from CSV / Excel" aria-label="Import from CSV or Excel"><Icon name="import" /><span>Import</span></button>
+          <button className="btn icon" type="button" onClick={() => setModal("export")} title="Export to CSV / Excel" aria-label="Export to CSV or Excel"><Icon name="export" /><span>Export</span></button>
         </div></div>
       {modal === "export" && <ExportModal selected={[...picked]} total={s.total} filters={F} onClose={() => setModal("")} />}
       {modal === "import" && <ImportModal onClose={() => setModal("")} onDone={() => { data.invalidate("/candidates?", "/dashboard", "/daily"); reload(); }} />}
@@ -138,17 +135,17 @@ export default function Candidates({ query }) {
           <b>{fmt(picked.size)} selected</b>
           {!allOnPage && <button type="button" className="linkbtn" onClick={() => pickPage(true)}>Select all {r.items.length} on this page</button>}
           <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Clear</button>
-          <button type="button" className="btn primary sm" onClick={() => setModal("export")}><Icon name="download" /> Export selected</button>
+          <button type="button" className="btn primary sm" onClick={() => setModal("export")}><Icon name="export" /> Export selected</button>
         </div>)}
       {!r.items.length ? <div className="panel empty">No candidates match these filters. <button className="btn sm" type="button" onClick={reset}>Reset filters</button></div>
         : view === "cards" ? <div className="cards">{r.items.map((c) => <Card key={c.id} c={c} picked={picked.has(c.id)} onPick={pick} />)}</div>
-        : <div className="panel tbl" style={{ padding: "6px 12px" }}><table><thead><tr><th className="pickc"><input type="checkbox" checked={allOnPage} onChange={(e) => pickPage(e.target.checked)} aria-label="Select all on this page" /></th><th>Name</th><th>Pool</th><th>Current role</th><th>City</th><th>Exp</th><th>Data status</th><th>Contact</th><th>Profile</th><th>Updated</th></tr></thead><tbody>
+        : <div className={"panel tbl ptbl" + (picked.size ? " selecting" : "")} style={{ padding: "6px 12px" }}><table><thead><tr><th className="pickc"><label className="avsel head" title="Select all on this page"><input type="checkbox" checked={allOnPage} onChange={(e) => pickPage(e.target.checked)} aria-label="Select all on this page" /></label></th><th>Name</th><th>Pool</th><th>Current role</th><th>City</th><th title="Domain years / total years">Experience</th><th>Data status</th><th>Contact</th><th>Profile</th><th>Updated</th></tr></thead><tbody>
           {r.items.map((c) => (
             <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
-              <td className="pickc"><input type="checkbox" checked={picked.has(c.id)} onChange={(e) => pick(c.id, e.target.checked)} aria-label={"Select " + c.name} /></td>
+              <td className="pickc"><label className="avsel" onClick={(e) => e.stopPropagation()}><Avatar c={c} /><input type="checkbox" checked={picked.has(c.id)} onChange={(e) => pick(c.id, e.target.checked)} aria-label={"Select " + c.name} /></label></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
               <td>{c.current_title}<div className="small muted">{c.current_company}</div></td><td>{c.city}</td>
-              <td className="mono">{c.domain_experience_years ?? "-"}</td><td><StatusChip status={c.data_status} /></td>
+              <td>{c.domain_experience_years != null || c.total_experience_years != null ? <span className="expchip">{c.domain_experience_years ?? "–"}<small> / {c.total_experience_years ?? "–"} yrs</small></span> : <span className="muted">-</span>}</td><td><StatusChip status={c.data_status} /></td>
               <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>
           ))}</tbody></table></div>}

@@ -703,3 +703,35 @@ tr.picked td{background:var(--brand-soft)}
 .errlist span{color:var(--muted)}
 .modal .sec h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 .mhead2 .iconx{position:static}
+/* ===== v2: experience highlight, hover checkboxes ===== */
+.cexp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cexp div{background:var(--brand-soft);border-radius:10px;padding:7px 10px;display:flex;align-items:baseline;gap:6px;min-width:0}
+.cexp div+div{background:var(--sn-soft)}
+.cexp b{font-size:18px;color:var(--brand);font-variant-numeric:tabular-nums}
+.cexp div+div b{color:var(--sn)}
+.cexp span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.expchip{display:inline-flex;align-items:baseline;gap:2px;background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:3px 10px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.expchip small{font-weight:500;color:var(--muted)}
+/* nicer checkbox everywhere on this page */
+.ccard .pick input,.pickc input{appearance:none;-webkit-appearance:none;width:18px;height:18px;border:1.8px solid var(--muted);border-radius:5px;background:var(--panel);display:grid;place-items:center;cursor:pointer;margin:0;transition:all .12s}
+.ccard .pick input:checked,.pickc input:checked{background:var(--brand);border-color:var(--brand)}
+.ccard .pick input:checked::after,.pickc input:checked::after{content:"";width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.ccard .pick input:focus-visible,.pickc input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+/* table: avatar turns into a checkbox on hover / while selecting */
+.ptbl .pickc{width:46px;padding-right:0}
+.avsel{position:relative;display:grid;place-items:center;width:34px;height:34px;cursor:pointer}
+.avsel .av{width:34px;height:34px;font-size:12px;transition:opacity .12s}
+.avsel input{position:absolute;opacity:0;pointer-events:none}
+.ptbl tr:hover .avsel input,.ptbl.selecting .avsel input,.avsel input:checked,.avsel input:focus-visible{opacity:1;pointer-events:auto}
+.ptbl tr:hover .avsel .av,.ptbl.selecting .avsel .av,tr.picked .avsel .av{opacity:0}
+.avsel.head input{opacity:0}
+.ptbl thead:hover .avsel.head input,.ptbl.selecting .avsel.head input{opacity:1;pointer-events:auto}
+@media (hover:none){.avsel input{opacity:1;pointer-events:auto}.avsel .av{opacity:0}}
+.cexp div{flex-direction:column;align-items:flex-start;gap:0;padding:6px 10px}
+.cexp div:first-child{background:var(--sn-soft)}.cexp div:first-child b{color:var(--sn)}
+.cexp div+div{background:var(--brand-soft)}.cexp div+div b{color:var(--brand)}
+.cexp b{font-size:18px;line-height:1.2}
+.cexp b small{font-size:11px;font-weight:600;opacity:.8}
+.cexp span{font-size:11px}
+.cexp.none{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:10px;min-height:46px}
+.cexp.none span{font-style:italic;opacity:.75}
