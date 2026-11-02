@@ -22,7 +22,7 @@ function Badge({ c }) {
 function CompanyLogo({ c, size = "" }) {
   const [bad, setBad] = useState(false);
   const name = String(c.current_company || "").trim();
-  if (!name) return <span className={"clogo nocomp " + size} title="Company not added" />;
+  if (!name) return <span className={"clogo nocomp " + size} title="Company not found"><Icon name="nobuilding" /></span>;
   const ini = name.replace(/[^A-Za-z0-9 ]/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
   let h = 0; for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;   // same company = same colour
   return (
@@ -43,7 +43,7 @@ function PickLogo({ c, picked, onPick, size }) {
 }
 
 function Card({ c, picked, onPick }) {
-  const Line = ({ icon, v, empty, strong }) => <div className={"cline" + (v ? "" : " none") + (strong && v ? " strong" : "")}><Icon name={icon} size={14} /><span>{v || empty}</span></div>;
+  const Line = ({ icon, v, empty, strong }) => <div className={"cline ic-" + icon + (v ? "" : " none") + (strong && v ? " strong" : "")}><span className="cic2"><Icon name={icon} size={13} /></span><span>{v || empty}</span></div>;
   return (
     <a className={"card ccard" + (picked ? " picked" : "")} href={href(c.id)}>
       <div className="head"><PickLogo c={c} picked={picked} onPick={onPick} size="lg" />

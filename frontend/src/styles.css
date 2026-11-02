@@ -793,3 +793,15 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .addbtn{padding-left:6px}
 .addic{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.2);display:grid;place-items:center}
 .addbtn:hover .addic{background:rgba(255,255,255,.3)}
+/* ===== v5: "no company" icon + coloured line icons on cards ===== */
+.clogo.nocomp{background:var(--bg,#f4f5fa);border:1px solid var(--line);color:var(--muted)}
+.clogo.nocomp svg{width:55%;height:55%;opacity:.75}
+.cline .cic2{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:none}
+.cline .cic2 svg{color:inherit;stroke-width:2.2}
+.cline.ic-building .cic2{background:var(--brand-soft);color:var(--brand)}
+.cline.ic-pin .cic2{background:rgba(225,29,72,.10);color:#e11d48}
+.cline.ic-cert .cic2{background:rgba(217,119,6,.12);color:#d97706}
+[data-theme="dark"] .cline.ic-pin .cic2{background:rgba(244,63,94,.18);color:#fb7185}
+[data-theme="dark"] .cline.ic-cert .cic2{background:rgba(245,158,11,.18);color:#fbbf24}
+.cline.none .cic2{background:var(--bg,#f4f5fa);color:var(--muted);opacity:.7}
+.clines{gap:7px}
