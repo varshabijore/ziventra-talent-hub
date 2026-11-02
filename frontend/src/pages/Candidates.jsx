@@ -86,6 +86,8 @@ export default function Candidates({ query }) {
   const [picked, setPicked] = useState(() => new Set());
   const [modal, setModal] = useState("");
   const [busyDel, setBusyDel] = useState(false);
+  const [moreF, setMoreF] = useState(() => store.get("cand_more_filters", "0") === "1");
+  const toggleMore = () => setMoreF((v) => { store.set("cand_more_filters", v ? "0" : "1"); return !v; });
   const toast = useToast();
   const delSelected = async () => {
     setBusyDel(true);
@@ -109,6 +111,11 @@ export default function Candidates({ query }) {
       <option value="">{label}</option>{opts.map((o) => { const v = o.v ?? o; return <option key={v} value={v}>{o.l ?? o}</option>; })}
     </select>
   );
+  const LBL = { role: (v) => v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v,
+    min_score: (v) => v + "%+ complete", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
+  const activeChips = [...Object.keys(LBL).filter((k) => F[k]).map((k) => [k, LBL[k](F[k])]), ...CHECKS.filter(([k]) => F[k])];
+  const moreCount = activeChips.length;
+  const activeCount = moreCount + (F.pool ? 1 : 0) + (F.city ? 1 : 0) + (F.q ? 1 : 0);
   const K = ({ l, v, sub, hl }) => <div className="kpi" style={hl ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : undefined}><div><div className="l">{l}</div><div className="v">{v}</div><div className="d">{sub}</div></div></div>;
   const from = r.items.length ? (r.page - 1) * r.size + 1 : 0;
 
@@ -139,19 +146,36 @@ export default function Candidates({ query }) {
         <K l="Cities" v={fmt(s.cities)} sub="where they are based" />
         <K l="Avg profile" v={s.avg_percent + "%"} sub="completeness" />
       </section>
-      <section className="panel"><div className="filters">
-        <input className="q" type="search" placeholder="Search name, title, company, skill, module…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
-        <Sel k="pool" label="All pools" opts={["ServiceNow", "AI/ML"]} />
-        <Sel k="city" label="All cities" opts={f.cities} />
-        <Sel k="role" label="All roles" opts={f.roles} />
-        <Sel k="bucket" label="All experience" opts={f.buckets.map((b) => ({ v: b, l: b === "Unknown" ? "Unknown" : b + " yrs" }))} />
-        <Sel k="data_status" label="Data status" opts={f.data_status} />
-        <Sel k="min_score" label="Any profile %" opts={[{ v: "90", l: "90%+ complete" }, { v: "70", l: "70%+ complete" }, { v: "50", l: "50%+ complete" }]} />
-        <Sel k="updated_within" label="Any update time" opts={[{ v: "1", l: "Updated today" }, { v: "7", l: "Last 7 days" }, { v: "30", l: "Last 30 days" }]} />
-        {CHECKS.map(([k, l]) => <label key={k} className="chk"><input type="checkbox" checked={F[k]} onChange={(e) => set(k, e.target.checked)} /> {l}</label>)}
-        <button className="btn ghost sm" type="button" onClick={reset}>Reset</button>
-        {F.first_seen && <span className="chip c-brand">Found on {F.first_seen} <button type="button" className="chip c-brand" aria-label="Clear day filter" onClick={() => { set("first_seen", ""); go("/candidates"); }}>✕</button></span>}
-      </div></section>
+      <section className="panel fpanel">
+        <div className="frow">
+          <div className="fsearch"><Icon name="search" size={16} />
+            <input type="search" placeholder="Search name, title, company, skill, module…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
+            {q && <button type="button" className="fclear" onClick={() => setQ("")} aria-label="Clear search">✕</button>}</div>
+          <Sel k="pool" label="All pools" opts={["ServiceNow", "AI/ML"]} />
+          <Sel k="city" label="All cities" opts={f.cities} />
+          <button type="button" className={"btn fbtn" + (moreF ? " on" : "")} onClick={toggleMore} aria-expanded={moreF}>
+            <Icon name="sliders" size={16} /><span>Filters</span>{moreCount > 0 && <b className="fcount">{moreCount}</b>}<Icon name="down" size={14} /></button>
+          {activeCount > 0 && <button className="linkbtn freset" type="button" onClick={reset}>Clear all</button>}
+        </div>
+        {moreF && (
+          <div className="fmore">
+            <div className="fgrid">
+              <label className="fl">Role<Sel k="role" label="All roles" opts={f.roles} /></label>
+              <label className="fl">Experience<Sel k="bucket" label="All experience" opts={f.buckets.map((b) => ({ v: b, l: b === "Unknown" ? "Unknown" : b + " yrs" }))} /></label>
+              <label className="fl">Data status<Sel k="data_status" label="Any status" opts={f.data_status} /></label>
+              <label className="fl">Profile complete<Sel k="min_score" label="Any profile %" opts={[{ v: "90", l: "90%+ complete" }, { v: "70", l: "70%+ complete" }, { v: "50", l: "50%+ complete" }]} /></label>
+              <label className="fl">Updated<Sel k="updated_within" label="Any time" opts={[{ v: "1", l: "Updated today" }, { v: "7", l: "Last 7 days" }, { v: "30", l: "Last 30 days" }]} /></label>
+            </div>
+            <div className="fpills"><span className="flabel">Only show</span>
+              {CHECKS.map(([k, l]) => <button key={k} type="button" className={"fpill" + (F[k] ? " on" : "")} aria-pressed={!!F[k]} onClick={() => set(k, !F[k])}>{F[k] && <Icon name="check" size={13} />}{l}</button>)}
+            </div>
+          </div>
+        )}
+        {!moreF && moreCount > 0 && (
+          <div className="factive">{activeChips.map(([k, l]) => <span key={k} className="fchip">{l}<button type="button" onClick={() => set(k, DEFAULT[k])} aria-label={"Remove " + l}>✕</button></span>)}</div>
+        )}
+        {F.first_seen && <div className="factive"><span className="fchip">Found on {F.first_seen}<button type="button" aria-label="Clear day filter" onClick={() => { set("first_seen", ""); go("/candidates"); }}>✕</button></span></div>}
+      </section>
       <div className="listhead"><span className="small muted">Showing {fmt(from)}–{fmt((r.page - 1) * r.size + r.items.length)} of {fmt(s.total)}</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <select aria-label="Sort" style={{ width: "auto" }} value={F.sort} onChange={(e) => setF({ ...F, sort: e.target.value, dir: e.target.value === "name" ? "asc" : "desc", page: 1 })}>

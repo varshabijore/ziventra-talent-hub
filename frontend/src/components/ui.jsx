@@ -37,6 +37,8 @@ const paths = {
   download: <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />,
   upload: <path d="M12 15V3M7 8l5-5 5 5M4 21h16" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  sliders: <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4" />,
   nobuilding: <><path d="M6 6v15h12V10M9 3h9v4" /><path d="M10 15h0M14 15h0M10 11h0" /><path d="M3 3l18 18" /></>,
   userplus: <><circle cx="9" cy="8" r="3.6" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" /></>,
   trash: <><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3" /></>,
