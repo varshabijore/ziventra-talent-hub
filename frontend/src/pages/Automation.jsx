@@ -4,6 +4,20 @@ import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import Contacts from "./Contacts.jsx";
+// compact pool split for the KPI card: one thin bar + one line of coloured numbers (hover shows the pool name)
+function PoolSplit({ x }) {
+  const parts = [["ServiceNow", x.new_sn, "var(--sn)"], ["AI/ML", x.new_ai, "var(--ai)"], ["Salesforce", x.new_sf, "var(--sf)"], ["Workday", x.new_wd, "var(--wd)"]]
+    .filter(([, n]) => n > 0);
+  const total = parts.reduce((a, [, n]) => a + n, 0);
+  if (!total) return <>no new candidates</>;
+  const label = parts.map(([p, n]) => `${n} ${p}`).join(", ");
+  return (
+    <span className="psplit" title={label} aria-label={label}>
+      <span className="pbar">{parts.map(([p, n, c]) => <i key={p} style={{ width: (100 * n) / total + "%", background: c }} />)}</span>
+      <span className="pnums">{parts.map(([p, n, c]) => <span key={p}><b style={{ background: c }} />{fmt(n)}</span>)}</span>
+    </span>
+  );
+}
 const split = (x, sep = ", ") => [[x.new_sn, "ServiceNow"], [x.new_ai, "AI/ML"], [x.new_sf, "Salesforce"], [x.new_wd, "Workday"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${n || 0} ${l}`).join(sep);
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
@@ -107,7 +121,7 @@ export default function Automation({ query }) {
 
       <section className="kpis">
         <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs" value={fmt(w.runs)} sub={single ? "workflow runs that day" : `in ${d.days} days`} />
-        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={split(w, " · ")} />
+        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={<PoolSplit x={w} />} />
         <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Enriched" value={fmt(w.enriched)} sub={`${w.emails_valid} with a valid email`} />
         <Kpi icon="refresh" bg="var(--info-soft)" fg="var(--info)" label="Refreshed" value={fmt(w.checked)} sub={`${w.changed} LinkedIn changes`} />
         <Kpi icon="star" bg="var(--warn-soft)" fg="var(--warn)" label="Apify cost" value={money(w.cost)} sub={`${w.dup_rate}% of scraped results were duplicates`} />
