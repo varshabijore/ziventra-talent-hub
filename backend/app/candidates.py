@@ -30,6 +30,16 @@ def iso(v):
 
 
 DATE_KEYS = ("first_seen", "last_updated", "last_checked")
+COMMON_COUNTRIES = ["India", "United States", "United Kingdom", "Canada", "Australia", "Germany", "Singapore",
+                    "United Arab Emirates", "Netherlands", "Ireland"]   # always in the country list, even with no candidates yet
+SPLIT = re.compile(r"\s*[;,|\n]\s*")
+
+
+def tokens(text):
+    """'Python; PyTorch, SQL' -> ['Python', 'PyTorch', 'SQL']"""
+    return [t for t in SPLIT.split(str(text or "").strip()) if 1 < len(t) <= 40]
+
+
 MAIN_COUNTRIES = 6          # the biggest countries get their own option; the rest are "Other"
 OTHER = "Other"
 FLOW_LABEL = {"claude": "first bulk import (Oct 2026)", "n8n": "n8n automation"}
@@ -145,50 +155,91 @@ class Candidates:
             self._fields = (time.time(), f)
         return f
 
-    # ---------- pools and roles people added on the website ----------
+    # ---------- filter options people added on the website (pools, roles, countries, cities, skills, modules) ----------
     def options(self):
         s = self.store.settings_get()
-        return {"pools": [dict(p) for p in s.get("custom_pools", [])], "roles": list(s.get("custom_roles", []))}
+        return {"pools": [dict(p) for p in s.get("custom_pools", [])], "roles": list(s.get("custom_roles", [])),
+                "countries": list(s.get("custom_countries", [])), "cities": [dict(c) for c in s.get("custom_cities", [])],
+                "skills": [dict(x) for x in s.get("custom_skills", [])], "modules": [dict(x) for x in s.get("custom_modules", [])],
+                "all_pools": self.pool_names(), "all_countries": self.country_names()}
 
     def pool_names(self):
-        return [*POOLS.values(), *[p["name"] for p in self.options()["pools"]]]
+        s = self.store.settings_get()
+        return [*POOLS.values(), *[p["name"] for p in s.get("custom_pools", [])]]
+
+    def country_names(self, views=None):
+        """Countries in the data (most candidates first), then the common ones and the ones added on the website."""
+        count = {}
+        for v in (views if views is not None else self.all_views()):
+            if v.get("country"):
+                count[v["country"]] = count.get(v["country"], 0) + 1
+        out = [c for c, _ in sorted(count.items(), key=lambda x: -x[1])]
+        extra = [*COMMON_COUNTRIES, *self.store.settings_get().get("custom_countries", [])]
+        return out + sorted({c for c in extra if c not in count})
 
     def pool_key(self, label):
         if label in POOL_KEY:
             return POOL_KEY[label]
         return CUSTOM_KEY if any(p["name"] == label for p in self.options()["pools"]) else None
 
-    def add_option(self, kind, name, desc=""):
+    def add_option(self, kind, name, desc="", parent=""):
         name = re.sub(r"\s+", " ", str(name or "")).strip()[:40]
+        parent = str(parent or "").strip()
         if len(name) < 2:
             return {"error": "Give a name of at least 2 letters"}
         s = self.store.settings_get()
+        low = name.lower()
         if kind == "pool":
-            if name.lower() in {p.lower() for p in self.pool_names()}:
+            if low in {p.lower() for p in self.pool_names()}:
                 return {"error": f"A pool called {name} already exists"}
             s.setdefault("custom_pools", []).append({"name": name, "desc": str(desc or "").strip()[:80], "added": today_ist()})
         elif kind == "role":
             known = {str(v.get("role_category") or "").lower() for v in self.all_views()} | {r.lower() for r in s.get("custom_roles", [])}
-            if name.lower() in known:
+            if low in known:
                 return {"error": f"The role {name} already exists"}
             s.setdefault("custom_roles", []).append(name)
+        elif kind == "country":
+            if low in {c.lower() for c in self.country_names()}:
+                return {"error": f"{name} is already in the list"}
+            s.setdefault("custom_countries", []).append(name)
+        elif kind == "city":
+            if not parent:
+                return {"error": "Choose the country of this city"}
+            known = {(str(v.get("city") or "").lower(), v.get("country")) for v in self.all_views()} | \
+                    {(c["name"].lower(), c["country"]) for c in s.get("custom_cities", [])}
+            if (low, parent) in known:
+                return {"error": f"{name} is already a city in {parent}"}
+            s.setdefault("custom_cities", []).append({"name": name, "country": parent})
+        elif kind in ("skill", "module"):
+            key = "custom_" + kind + "s"
+            if any(x["name"].lower() == low and x.get("pool", "") == parent for x in s.get(key, [])):
+                return {"error": f"{name} is already added" + (f" for {parent}" if parent else "")}
+            s.setdefault(key, []).append({"name": name, "pool": parent})
         else:
-            return {"error": "Choose pool or role"}
+            return {"error": "Choose what to add"}
         self.store.settings_put(s)
         self._fields = (0.0, None)
         self._changed()
         return {"ok": True, **self.options()}
 
-    def remove_option(self, kind, name):
+    def remove_option(self, kind, name, parent=""):
         s = self.store.settings_get()
-        field = "pool" if kind == "pool" else "role_category"
-        used = sum(1 for v in self.all_views() if v.get(field) == name)
-        if used:
-            return {"error": f"{used} candidate(s) still use {name}. Move or delete them first."}
+        field = {"pool": "pool", "role": "role_category", "country": "country", "city": "city"}.get(kind)
+        if field:
+            used = sum(1 for v in self.all_views() if v.get(field) == name and (kind != "city" or v.get("country") == parent))
+            if used:
+                return {"error": f"{used} candidate(s) still use {name}. Move or delete them first."}
         if kind == "pool":
             s["custom_pools"] = [p for p in s.get("custom_pools", []) if p["name"] != name]
-        else:
+        elif kind == "role":
             s["custom_roles"] = [r for r in s.get("custom_roles", []) if r != name]
+        elif kind == "country":
+            s["custom_countries"] = [c for c in s.get("custom_countries", []) if c != name]
+        elif kind == "city":
+            s["custom_cities"] = [c for c in s.get("custom_cities", []) if not (c["name"] == name and c["country"] == parent)]
+        elif kind in ("skill", "module"):
+            key = "custom_" + kind + "s"
+            s[key] = [x for x in s.get(key, []) if not (x["name"] == name and x.get("pool", "") == (parent or ""))]
         self.store.settings_put(s)
         self._changed()
         return {"ok": True, **self.options()}
@@ -261,6 +312,7 @@ class Candidates:
         days = int(p.get("updated_within") or 0)
         since = (dt.datetime.now(IST) - dt.timedelta(days=days)).date().isoformat() if days else ""
         yes = lambda k: str(p.get(k) or "").lower() in ("1", "true", "yes")
+        skill, module = str(p.get("skill") or "").lower().strip(), str(p.get("module") or "").lower().strip()
         # countries: the biggest few get their own option, the rest are grouped as "Other"
         ccount = {}
         for v in in_pool:
@@ -274,6 +326,10 @@ class Candidates:
                                                                        "modules_specialization", "certifications", "standard_title")).lower():
                 return False
             if not in_country(v):
+                return False
+            if skill and skill not in {t.lower() for t in tokens(v.get("skills"))}:
+                return False
+            if module and module not in {t.lower() for t in tokens(v.get("modules_specialization"))}:
                 return False
             for key, field in (("city", "city"), ("role", "role_category"), ("bucket", "experience_bucket"),
                                ("data_status", "data_status")):
@@ -316,7 +372,19 @@ class Candidates:
         for v in in_pool:
             if v.get("city") and in_country(v):
                 cities[v["city"]] = cities.get(v["city"], 0) + 1
-        others = sum(n for c, n in ccount.items() if c not in main)
+        opt = self.options()
+        city_list = [c for c, _ in sorted(cities.items(), key=lambda x: (-x[1], x[0]))][:120]
+        city_list += sorted({c["name"] for c in opt["cities"] if (not ctry or c["country"] == ctry) and c["name"] not in cities})
+
+        def top(field, kind):   # most common skills / modules in this pool, plus the ones added on the website
+            n, label = {}, {}
+            for v in in_pool:
+                for t in tokens(v.get(field)):
+                    k = t.lower(); n[k] = n.get(k, 0) + 1; label.setdefault(k, t)
+            out = [label[k] for k, c in sorted(n.items(), key=lambda x: -x[1])[:80]]
+            have = {x.lower() for x in out}
+            out += sorted({x["name"] for x in opt[kind] if (not pool or not x.get("pool") or x["pool"] == pool) and x["name"].lower() not in have})
+            return out
         stats = {
             "total": len(rows), "pool_total": len(in_pool),
             "in_role": sum(1 for v in rows if v.get("title_match") == "Exact"),
@@ -328,9 +396,9 @@ class Candidates:
             "contactable": sum(1 for v in rows if scoring.has_value("email", v.get("email")) or scoring.has_value("phone", v.get("phone"))),
             "avg_percent": round(sum(v["percent"] for v in rows) / len(rows)) if rows else 0,
         }
-        facets = {"cities": [c for c, _ in sorted(cities.items(), key=lambda x: -x[1])][:80],
-                  "countries": main, "other_countries": others,
-                  "country_counts": {c: ccount[c] for c in main}, "pools": self.pool_names(), "roles": sorted(set(cnt("role_category")) | set(self.options()["roles"])),
+        facets = {"cities": city_list, "countries": self.country_names(in_pool),
+                  "skills": top("skills", "skills"), "modules": top("modules_specialization", "modules"),
+                  "pools": opt["all_pools"], "roles": sorted(set(cnt("role_category")) | set(opt["roles"])),
                   "buckets": [b for b in ("0-2", "2-5", "5-8", "8+", "Unknown") if any(v.get("experience_bucket") == b for v in in_pool)],
                   "data_status": DATA_STATUS}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,

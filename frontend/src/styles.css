@@ -831,7 +831,7 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .fcount{background:var(--brand);color:#fff;border-radius:999px;font-size:11px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px}
 .freset{font-size:13px}
 .fmore{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
-.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}
 .fl{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 .fl select{width:100%;padding:8px 10px;font-size:14px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink)}
 .fpills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -844,7 +844,7 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .fchip button{border:0;background:rgba(0,0,0,.06);color:inherit;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;display:grid;place-items:center}
 @media (max-width:760px){
   .frow>select{flex:1 1 calc(50% - 4px)}
-  .fbtn{flex:1 1 100%;justify-content:center}
+  .fbtn{flex:1 1 40%;justify-content:center}
 }
 /* header buttons on tablet: keep on one line beside the title */
 @media (max-width:1100px){.tbtns .btn.icon span:not(.addic){display:none}.tbtns .btn.icon{padding:9px 11px}.tbtns .addbtn{padding:6px}}
@@ -934,3 +934,9 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .aorow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;background:var(--soft);border-radius:10px}
 .frow select:disabled{opacity:.6;cursor:not-allowed}
 .aoform .f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.aoform input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:400;background:var(--panel);color:var(--ink)}.aoform input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+
+/* v14: Add option modal tabs (6 kinds, wrap on phones) */
+.aotabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.aotabs button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.aotabs button[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.aoform select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:400;background:var(--panel);color:var(--ink)}

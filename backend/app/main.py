@@ -224,7 +224,8 @@ async def candidates(request):
 
 
 async def options(request):
-    """GET: pools and roles added on the website. POST {action: add|remove, kind: pool|role, name, desc?}."""
+    """GET: options added on the website. POST {action: add|remove, kind: pool|role|country|city|skill|module, name, desc?, parent?}
+    (parent = the country of a city, or the pool of a skill / module)."""
     c = S["cand"]
     if request.method == "GET":
         current_user(request)
@@ -236,9 +237,9 @@ async def options(request):
         raise HTTPException(400, "Send JSON")
     kind, name = str(data.get("kind") or ""), str(data.get("name") or "")
     if data.get("action") == "remove":
-        r = await run_in_threadpool(c.remove_option, kind, name)
+        r = await run_in_threadpool(c.remove_option, kind, name, str(data.get("parent") or ""))
     else:
-        r = await run_in_threadpool(c.add_option, kind, name, str(data.get("desc") or ""))
+        r = await run_in_threadpool(c.add_option, kind, name, str(data.get("desc") or ""), str(data.get("parent") or ""))
     if r.get("error"):
         return err(400, r["error"])
     log(request, u, f"option_{data.get('action') or 'add'}", f"{kind}: {name}")

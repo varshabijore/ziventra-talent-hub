@@ -7,7 +7,7 @@ import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import { POOL_NAMES } from "../pools.js";
 
-const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "", min_exp: "", max_exp: "",
+const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", skill: "", module: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "", min_exp: "", max_exp: "",
   open_to_work: false, certified: false, has_email: false, has_phone: false, in_role: false, sort: "updated", dir: "desc", page: 1 };
 // filters can come in the address (from the Dashboard smart search): /candidates?pool=Salesforce&city=Pune&has_email=1
 const fromQuery = (query) => {
@@ -125,7 +125,7 @@ export default function Candidates({ query }) {
       <option value="">{label}</option>{opts.map((o) => { const v = o.v ?? o; return <option key={v} value={v}>{o.l ?? o}</option>; })}
     </select>
   );
-  const LBL = { role: (v) => v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v,
+  const LBL = { role: (v) => v, skill: (v) => "Skill: " + v, module: (v) => "Module: " + v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v,
     min_score: (v) => v + "%+ complete", min_exp: (v) => v + "+ yrs exp", max_exp: (v) => "up to " + v + " yrs", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
   const activeChips = [...Object.keys(LBL).filter((k) => F[k]).map((k) => [k, LBL[k](F[k])]), ...CHECKS.filter(([k]) => F[k])];
   const moreCount = activeChips.length;
@@ -167,12 +167,12 @@ export default function Candidates({ query }) {
             <input type="search" placeholder="Search name, title, company, skill, module…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
             {q && <button type="button" className="fclear" onClick={() => setQ("")} aria-label="Clear search">✕</button>}</div>
           <Sel k="pool" label="All pools" opts={f.pools || POOL_NAMES} />
-          <Sel k="country" label="All countries" opts={[...(f.countries || []).map((c) => ({ v: c, l: `${c} (${fmt(f.country_counts?.[c] || 0)})` })),
-            ...((f.other_countries || F.country === "Other") ? [{ v: "Other", l: `Other countries (${fmt(f.other_countries || 0)})` }] : [])]} />
-          <Sel k="city" label={F.country ? (F.country === "Other" ? "All cities (other countries)" : `All cities in ${F.country}`) : "Choose a country first"}
-            opts={F.country ? f.cities : F.city ? [F.city] : []} disabled={!F.country && !F.city} title={!F.country ? "Pick a country to see its cities" : undefined} />
+          <Sel k="country" label="All countries" opts={f.countries || []} />
+          <Sel k="city" label="All cities" opts={F.city && !(f.cities || []).includes(F.city) ? [F.city, ...(f.cities || [])] : (f.cities || [])} />
           <button type="button" className={"btn fbtn" + (moreF ? " on" : "")} onClick={toggleMore} aria-expanded={moreF}>
             <Icon name="sliders" size={16} /><span>Filters</span>{moreCount > 0 && <b className="fcount">{moreCount}</b>}<Icon name="down" size={14} /></button>
+          <button type="button" className="btn fbtn" onClick={() => setModal("option")} title="Add a new pool, role, country, city, skill or module">
+            <Icon name="plus" size={16} /><span>Add option</span></button>
           {activeCount > 0 && <button className="linkbtn freset" type="button" onClick={reset}>Clear all</button>}
         </div>
         {moreF && (
@@ -183,8 +183,8 @@ export default function Candidates({ query }) {
               <label className="fl">Data status<Sel k="data_status" label="Any status" opts={f.data_status} /></label>
               <label className="fl">Profile complete<Sel k="min_score" label="Any profile %" opts={[{ v: "90", l: "90%+ complete" }, { v: "70", l: "70%+ complete" }, { v: "50", l: "50%+ complete" }]} /></label>
               <label className="fl">Updated<Sel k="updated_within" label="Any time" opts={[{ v: "1", l: "Updated today" }, { v: "7", l: "Last 7 days" }, { v: "30", l: "Last 30 days" }]} /></label>
-              <div className="fl"><span aria-hidden="true">&nbsp;</span><button type="button" className="btn addopt" onClick={() => setModal("option")}><Icon name="plus" size={15} /> Add option</button>
-                <span className="small muted">New pool or role, e.g. Python Developer</span></div>
+              <label className="fl">Skill<Sel k="skill" label="Any skill" opts={F.skill && !(f.skills || []).includes(F.skill) ? [F.skill, ...(f.skills || [])] : (f.skills || [])} /></label>
+              <label className="fl">Module<Sel k="module" label="Any module" opts={F.module && !(f.modules || []).includes(F.module) ? [F.module, ...(f.modules || [])] : (f.modules || [])} /></label>
             </div>
             <div className="fpills"><span className="flabel">Only show</span>
               {CHECKS.map(([k, l]) => <button key={k} type="button" className={"fpill" + (F[k] ? " on" : "")} aria-pressed={!!F[k]} onClick={() => set(k, !F[k])}>{F[k] && <Icon name="check" size={13} />}{l}</button>)}
