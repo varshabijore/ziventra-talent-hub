@@ -13,3 +13,8 @@ backups/
 n8n workflow/
 *.zip
 *.jpeg
+
+*.pdf
+*.zip
+*.png
+*.jpg
