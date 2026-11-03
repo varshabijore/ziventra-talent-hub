@@ -1,3 +1,4 @@
+import { POOLS } from "../pools.js";
 import { Avatar, BarChart, Donut, ErrorBox, HBars, Kpi, Loading, fmt, tone, when } from "../components/ui.jsx";
 import { useCached } from "../context/DataContext.jsx";
 
@@ -8,6 +9,8 @@ export default function Dashboard({ user }) {
   const { data: d, error, loading, reload } = useCached("/dashboard");
   if (loading && !d) return <Loading />;
   if (error) return <ErrorBox error={error} retry={reload} />;
+  const ct = d.contacts || { phones: 0, emails: 0, both: 0, list: [] };
+  const shown = POOLS.filter((p) => (d.pools?.[p.name] || 0) > 0 || ["ServiceNow", "AI/ML"].includes(p.name));
   return (
     <div className="dash">
       <div className="top"><div><h1>{greet()}, {user.name.split(" ")[0]}</h1>
@@ -21,11 +24,21 @@ export default function Dashboard({ user }) {
       <div className="grid3 drow">
         <div className="panel span2"><h2>New candidates per day</h2><p className="sub">Last 30 days, by the date automation first found them</p>
           <BarChart rows={d.daily.map((r) => ({ ...r, label: short(r.date) }))} width={980} height={typeof innerHeight !== "undefined" && innerHeight > 950 && innerWidth > 1100 ? 300 : 170} every={5}
-            series={[{ key: "ServiceNow", name: "ServiceNow", color: "var(--sn)" }, { key: "AI/ML", name: "AI/ML", color: "var(--ai)" }]} /></div>
-        <div className="panel"><h2>Pool split</h2><p className="sub">ServiceNow vs AI/ML</p>
-          <Donut label="candidates" parts={[{ label: "ServiceNow", value: d.pools["ServiceNow"] || 0, color: "var(--sn)" }, { label: "AI/ML", value: d.pools["AI/ML"] || 0, color: "var(--ai)" }]} /></div>
+            series={shown.map((p) => ({ key: p.name, name: p.name, color: p.color }))} /></div>
+        <div className="panel"><h2>Pool split</h2><p className="sub">{shown.map((p) => p.name).join(" vs ")}</p>
+          <Donut label="candidates" parts={shown.map((p) => ({ label: p.name, value: d.pools[p.name] || 0, color: p.color }))} /></div>
       </div>
-      <div className="grid3 drow">
+      <div className="grid4 drow">
+        <div className="panel">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><h2>Phone numbers found</h2><a className="small" href="/candidates?has_phone=1">View all</a></div>
+          <p className="sub"><b>{fmt(ct.phones)}</b> with phone · {fmt(ct.both)} with phone + email · {fmt(ct.emails)} with email</p>
+          <div className="fill">{ct.list.map((c) => (
+            <a key={c.id} className="row" href={"/candidate/" + encodeURIComponent(c.id)}><Avatar c={c} />
+              <div className="grow"><div className="t">{c.name}</div><div className="s">{c.pool} · {c.phone_source}</div></div>
+              <span className="mono small phonev">{c.phone}</span></a>
+          ))}
+          </div>{!ct.list.length && <div className="empty">No phone numbers yet</div>}
+        </div>
         <div className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><h2>Recently updated</h2><a className="small" href="/candidates">View all</a></div>
           <p className="sub">Latest changes by automation or by you</p>

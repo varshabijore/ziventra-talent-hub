@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { Icon, useToast } from "../components/ui.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
+import { POOLS } from "../pools.js";
 
 const SECTIONS = [
   { title: "Basic details", hint: "Name and LinkedIn profile are required", fields: [
@@ -11,6 +12,7 @@ const SECTIONS = [
     { k: "linkedin_url", l: "LinkedIn profile URL", req: true, ph: "https://www.linkedin.com/in/…", type: "url" },
     { k: "city", l: "City", ph: "Pune" },
     { k: "state", l: "State", ph: "Maharashtra" },
+    { k: "country", l: "Country", ph: "India" },
     { k: "open_to_work", l: "Open to work", opts: ["Yes", "No", "Unknown"] },
   ] },
   { title: "Work & experience", fields: [
@@ -104,9 +106,9 @@ export default function NewCandidate() {
       <section className="panel newc">
         <h2>Pool<em className="req"> *</em></h2>
         <div className="poolpick">
-          {["ServiceNow", "AI/ML"].map((p) => (
+          {POOLS.map(({ name: p, desc }) => (
             <button key={p} type="button" className={"poolopt" + (pool === p ? " on" : "")} aria-pressed={pool === p} onClick={() => { setPool(p); setErr({ ...err, pool: "" }); }}>
-              <b>{p}</b><span>{p === "ServiceNow" ? "Developers, admins, architects, consultants" : "ML, GenAI / LLM, data science, MLOps"}</span>
+              <b>{p}</b><span>{desc}</span>
             </button>))}
         </div>
         {err.pool && <span className="ferr">{err.pool}</span>}

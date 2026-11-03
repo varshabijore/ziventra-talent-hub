@@ -26,6 +26,7 @@ EXTRA_EDITABLE = [
     {"key": "standard_title", "label": "Standard title", "group": "Experience"},
     {"key": "seniority", "label": "Seniority", "group": "Experience", "options": ["Intern", "Junior", "Mid", "Senior", "Lead", "Manager"]},
     {"key": "state", "label": "State", "group": "Contact"},
+    {"key": "country", "label": "Country", "group": "Contact"},
     {"key": "past_employers", "label": "Past employers", "group": "Background", "type": "textarea"},
     {"key": "notes", "label": "Education & notes", "group": "Background", "type": "textarea"},
 ]

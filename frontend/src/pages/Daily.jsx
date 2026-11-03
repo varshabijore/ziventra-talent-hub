@@ -3,6 +3,7 @@ import { qs } from "../api.js";
 import { BarChart, ErrorBox, Icon, Loading, PoolChip, StatusChip, fmt, tone, useSmall } from "../components/ui.jsx";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
+import { POOL_NAMES } from "../pools.js";
 
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const short = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
@@ -45,14 +46,14 @@ export default function Daily({ query }) {
   const s = d.summary;
   const count = { new: s.new, enriched: s.enriched, refreshed: s.refreshed, changed: s.changed };
   const sub = {
-    new: `${fmt(s.new_sn)} ServiceNow + ${fmt(s.new_ai)} AI/ML`,
+    new: [[s.new_sn, "ServiceNow"], [s.new_ai, "AI/ML"], [s.new_sf, "Salesforce"], [s.new_wd, "Workday"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${fmt(n || 0)} ${l}`).join(" + "),
     enriched: "full LinkedIn profile added",
     refreshed: "profiles re-checked",
     changed: "company, title, city…",
   };
   const cost = d.runs.reduce((a, r) => a + (Number(r.cost) || 0), 0);
   const all = d.lists?.[view.id] || [];
-  const snN = all.filter((c) => c.pool === "ServiceNow").length;
+  const poolTabs = [["", `All ${all.length}`], ...POOL_NAMES.map((p) => [p, all.filter((c) => c.pool === p).length]).filter(([p, n], i) => n || i < 2).map(([p, n]) => [p, `${p} ${n}`])];
 
   return (
     <>
@@ -78,7 +79,7 @@ export default function Daily({ query }) {
             <div><h2>{view.title}</h2><p className="sub" style={{ margin: 0 }}>{fmt(all.length)} total · click a row to open the profile</p></div>
             <div className="ltools">
               <div className="seg" role="group" aria-label="Pool">
-                {[["", `All ${all.length}`], ["ServiceNow", `ServiceNow ${snN}`], ["AI/ML", `AI/ML ${all.length - snN}`]].map(([k, l]) => (
+                {poolTabs.map(([k, l]) => (
                   <button key={k} type="button" aria-pressed={pool === k} onClick={() => setPool(k)}>{l}</button>))}
               </div>
               <input type="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search this list" style={{ width: 170 }} />

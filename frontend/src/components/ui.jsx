@@ -1,5 +1,6 @@
 // Shared building blocks: icons, chips, avatar, KPI card, completeness badge with popover, toast, modal, charts.
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { poolCls } from "../pools.js";
 
 export const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 export const initials = (n) => String(n || "?").trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
@@ -60,11 +61,11 @@ export const Icon = ({ name, size }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 );
 
-export const PoolChip = ({ pool }) => <span className={"chip " + (pool === "ServiceNow" ? "c-sn" : "c-ai")}>{pool}</span>;
+export const PoolChip = ({ pool }) => <span className={"chip " + poolCls(pool)}>{pool}</span>;
 const D_TONE = { Discovered: "c-mute", Enriched: "c-sn", Refreshed: "c-info", Rejected: "c-bad" };
 export const StatusChip = ({ status }) => <span className={"chip " + (D_TONE[status] || "c-mute")} title="Data status (set by automation)">{status}</span>;
 export const tone = (p) => (p >= 90 ? ["var(--good)", "c-good"] : p >= 70 ? ["var(--info)", "c-info"] : p >= 50 ? ["var(--warn)", "c-warn"] : ["var(--bad)", "c-bad"]);
-export const Avatar = ({ c, className = "" }) => <div className={`av ${c.pool === "ServiceNow" ? "c-sn" : "c-ai"} ${className}`}>{initials(c.name)}</div>;
+export const Avatar = ({ c, className = "" }) => <div className={`av ${poolCls(c.pool)} ${className}`}>{initials(c.name)}</div>;
 
 export function Kpi({ icon, bg, fg, label, value, sub, up, highlight }) {
   return (

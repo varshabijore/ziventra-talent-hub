@@ -4,8 +4,9 @@ import { ExportModal, ImportModal } from "../components/Transfer.jsx";
 import { Avatar, ErrorBox, Icon, Loading, Modal, PoolChip, StatusChip, fmt, tone, useSmall, useToast, when } from "../components/ui.jsx";
 import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
+import { POOL_NAMES } from "../pools.js";
 
-const DEFAULT = { q: "", pool: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "",
+const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "",
   open_to_work: false, certified: false, has_email: false, has_phone: false, in_role: false, sort: "updated", dir: "desc", page: 1 };
 const CHECKS = [["open_to_work", "Open to work"], ["certified", "Certified"], ["has_email", "Email"], ["has_phone", "Phone"], ["in_role", "In role now"]];
 const href = (id) => "/candidate/" + encodeURIComponent(id);
@@ -58,7 +59,7 @@ function Card({ c, picked, onPick }) {
       ) : <div className="cexp none"><span>Experience not added yet</span></div>}
       <div className="clines">
         <Line icon="building" v={c.current_company} empty="Company not added" strong />
-        <Line icon="pin" v={[c.city, c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
+        <Line icon="pin" v={[c.city, c.country && c.country !== "India" ? c.country : c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
         <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" strong />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
@@ -69,7 +70,7 @@ function Card({ c, picked, onPick }) {
 
 export default function Candidates({ query }) {
   const data = useData();
-  const [F, setF] = useState(() => ({ ...DEFAULT, first_seen: query.get("first_seen") || "" }));
+  const [F, setF] = useState(() => ({ ...DEFAULT, first_seen: query.get("first_seen") || "", has_phone: query.get("has_phone") === "1" }));
   const [viewPick, setView] = useState(() => store.get("cand_view", "cards"));
   const small = useSmall();
   const phone = useSmall("(max-width: 560px)");
@@ -82,7 +83,7 @@ export default function Candidates({ query }) {
 
 
   const { data: r, error, reload } = useCached("/candidates" + qs({ ...F, size: view === "table" ? 25 : small ? 6 : 12 }), { keep: true });
-  const set = (k, v) => setF((f) => ({ ...f, [k]: v, page: 1 }));
+  const set = (k, v) => setF((f) => ({ ...f, [k]: v, ...(k === "country" ? { city: "" } : {}), page: 1 }));
   const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (query.get("first_seen")) go("/candidates"); };
   const [picked, setPicked] = useState(() => new Set());
   const [modal, setModal] = useState("");
@@ -116,7 +117,7 @@ export default function Candidates({ query }) {
     min_score: (v) => v + "%+ complete", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
   const activeChips = [...Object.keys(LBL).filter((k) => F[k]).map((k) => [k, LBL[k](F[k])]), ...CHECKS.filter(([k]) => F[k])];
   const moreCount = activeChips.length;
-  const activeCount = moreCount + (F.pool ? 1 : 0) + (F.city ? 1 : 0) + (F.q ? 1 : 0);
+  const activeCount = moreCount + (F.pool ? 1 : 0) + (F.city ? 1 : 0) + (F.country ? 1 : 0) + (F.q ? 1 : 0);
   const K = ({ l, v, sub, hl }) => <div className="kpi" style={hl ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : undefined}><div><div className="l">{l}</div><div className="v">{v}</div><div className="d">{sub}</div></div></div>;
   const from = r.items.length ? (r.page - 1) * r.size + 1 : 0;
 
@@ -144,7 +145,7 @@ export default function Candidates({ query }) {
         <K l="Certified" v={fmt(s.certified)} sub="1+ certification" />
         <K l="Open to work" v={fmt(s.open_to_work)} sub="LinkedIn #OpenToWork" />
         <K l="Contactable" v={fmt(s.contactable)} sub="email or phone found" />
-        <K l="Cities" v={fmt(s.cities)} sub="where they are based" />
+        <K l="Cities" v={fmt(s.cities)} sub={s.countries > 1 ? `in ${fmt(s.countries)} countries` : "where they are based"} />
         <K l="Avg profile" v={s.avg_percent + "%"} sub="completeness" />
       </section>
       <section className="panel fpanel">
@@ -152,7 +153,8 @@ export default function Candidates({ query }) {
           <div className="fsearch"><Icon name="search" size={16} />
             <input type="search" placeholder="Search name, title, company, skill, module…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
             {q && <button type="button" className="fclear" onClick={() => setQ("")} aria-label="Clear search">✕</button>}</div>
-          <Sel k="pool" label="All pools" opts={["ServiceNow", "AI/ML"]} />
+          <Sel k="pool" label="All pools" opts={POOL_NAMES} />
+          <Sel k="country" label="All countries" opts={f.countries || []} />
           <Sel k="city" label="All cities" opts={f.cities} />
           <button type="button" className={"btn fbtn" + (moreF ? " on" : "")} onClick={toggleMore} aria-expanded={moreF}>
             <Icon name="sliders" size={16} /><span>Filters</span>{moreCount > 0 && <b className="fcount">{moreCount}</b>}<Icon name="down" size={14} /></button>
@@ -202,7 +204,7 @@ export default function Candidates({ query }) {
             <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
               <td className="pickc"><PickLogo c={c} picked={picked.has(c.id)} onPick={pick} size="md" /></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
-              <td><div className="rolec"><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}</td>
+              <td><div className="rolec"><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}{c.country && c.country !== "India" && <div className="small muted">{c.country}</div>}</td>
               <td>{c.domain_experience_years != null || c.total_experience_years != null ? <span className="expchip">{c.domain_experience_years ?? "–"}<small> / {c.total_experience_years ?? "–"} yrs</small></span> : <span className="muted">-</span>}</td><td><StatusChip status={c.data_status} /></td>
               <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>

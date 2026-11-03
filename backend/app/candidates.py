@@ -3,7 +3,7 @@ Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`
 and the screen always shows the manual value when there is one."""
 import datetime as dt, threading, time
 from . import automation, config, scoring, transfer
-from .store import POOLS, now
+from .store import POOLS, POOL_KEY, now
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 HIRING = ["New", "Contacted", "Interested", "Shortlisted", "Placed", "Rejected"]
@@ -123,6 +123,7 @@ class Candidates:
         v["custom"] = d.get("custom") or {}
         v["id"] = cid
         v["pool"] = d.get("pool") or POOLS[d["_pool"]]
+        v["country"] = v.get("country") or "India"     # everything before global search was India-only
         readiness = str(d.get("readiness") or "Discovered")
         v["data_status"] = "Rejected" if readiness == "Rejected" else "Refreshed" if d.get("last_checked") else \
             "Enriched" if readiness in ("Enriched", "Talent-pool ready") else "Discovered"
@@ -146,7 +147,7 @@ class Candidates:
     @staticmethod
     def light(v):
         keys = ["id", "pool", "name", "linkedin_url", "current_title", "current_company", "city", "state", "standard_title",
-                "title_match", "role_category", "experience_bucket", "total_experience_years", "domain_experience_years",
+                "country", "title_match", "role_category", "experience_bucket", "total_experience_years", "domain_experience_years",
                 "certifications", "open_to_work", "data_status", "percent", "updated_at", "updated_by",
                 "first_seen", "source_flow"]
         out = {k: v.get(k) for k in keys}
@@ -186,7 +187,7 @@ class Candidates:
             if q and q not in " ".join(str(v.get(k) or "") for k in ("name", "current_title", "current_company", "city", "skills",
                                                                        "modules_specialization", "certifications", "standard_title")).lower():
                 return False
-            for key, field in (("city", "city"), ("role", "role_category"), ("bucket", "experience_bucket"),
+            for key, field in (("city", "city"), ("country", "country"), ("role", "role_category"), ("bucket", "experience_bucket"),
                                ("data_status", "data_status")):
                 if p.get(key) and str(v.get(field) or "") != p[key]:
                     return False
@@ -219,10 +220,12 @@ class Candidates:
         size = min(max(int(p.get("size") or 24), 1), 200)
         page = max(int(p.get("page") or 1), 1)
         cnt = lambda key: sorted({str(v.get(key)) for v in in_pool if v.get(key)})
-        cities = {}
+        cities, countries = {}, {}
+        ctry = p.get("country") or ""
         for v in in_pool:
-            if v.get("city"):
+            if v.get("city") and (not ctry or v.get("country") == ctry):
                 cities[v["city"]] = cities.get(v["city"], 0) + 1
+            countries[v["country"]] = countries.get(v["country"], 0) + 1
         stats = {
             "total": len(rows), "pool_total": len(in_pool),
             "in_role": sum(1 for v in rows if v.get("title_match") == "Exact"),
@@ -230,10 +233,12 @@ class Candidates:
             "certified": sum(1 for v in rows if scoring.has_value("certifications", v.get("certifications"))),
             "open_to_work": sum(1 for v in rows if v.get("open_to_work") == "Yes"),
             "cities": len({v.get("city") for v in rows if v.get("city")}),
+            "countries": len({v.get("country") for v in rows if v.get("country")}),
             "contactable": sum(1 for v in rows if scoring.has_value("email", v.get("email")) or scoring.has_value("phone", v.get("phone"))),
             "avg_percent": round(sum(v["percent"] for v in rows) / len(rows)) if rows else 0,
         }
-        facets = {"cities": [c for c, _ in sorted(cities.items(), key=lambda x: -x[1])][:60], "roles": cnt("role_category"),
+        facets = {"cities": [c for c, _ in sorted(cities.items(), key=lambda x: -x[1])][:60],
+                  "countries": [c for c, _ in sorted(countries.items(), key=lambda x: -x[1])], "pools": [x for x in POOLS.values()], "roles": cnt("role_category"),
                   "buckets": [b for b in ("0-2", "2-5", "5-8", "8+", "Unknown") if any(v.get("experience_bucket") == b for v in in_pool)],
                   "data_status": DATA_STATUS}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,
@@ -294,8 +299,11 @@ class Candidates:
                 continue
             seen.add(data["linkedin_url"])
             cid = by_url.get(data["linkedin_url"])
-            if not cid and data["pool"] not in ("ServiceNow", "AI/ML"):
-                res["errors"].append({"row": i, "name": data.get("name") or "", "error": "Pool missing: add a Pool column (ServiceNow / AI/ML) or choose a default pool"})
+            if not cid and data["pool"] not in POOL_KEY:
+                res["errors"].append({"row": i, "name": data.get("name") or "", "error": "Pool missing: add a Pool column (ServiceNow / AI/ML / Salesforce / Workday) or choose a default pool"})
+                continue
+            if not cid and not self.store.has_pool(POOL_KEY[data["pool"]]):
+                res["errors"].append({"row": i, "name": data.get("name") or "", "error": f"{data['pool']} database is not connected yet"})
                 continue
             if cid:
                 data["pool"] = docs[cid].get("pool") or POOLS[docs[cid]["_pool"]]
@@ -452,7 +460,9 @@ class Candidates:
         """Add one candidate by hand. data = field values from the Add candidate form."""
         key = next((k for k, v in POOLS.items() if v == pool_label), None)
         if not key:
-            return {"error": "bad_value", "message": "Choose a pool (ServiceNow or AI/ML)"}
+            return {"error": "bad_value", "message": "Choose a pool (ServiceNow, AI/ML, Salesforce or Workday)"}
+        if not self.store.has_pool(key):
+            return {"error": "bad_value", "message": f"{pool_label} database is not connected yet. Add its MongoDB link in Render first."}
         url = transfer.clean_url(data.get("linkedin_url"))
         if not str(data.get("name") or "").strip() or not url:
             return {"error": "bad_value", "message": "Name and a LinkedIn profile URL (linkedin.com/in/...) are required"}
@@ -514,7 +524,7 @@ class Candidates:
         views = self.all_views(user_id)
         t = today_ist()
         days = [(dt.datetime.now(IST).date() - dt.timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
-        series = {d: {"date": d, "ServiceNow": 0, "AI/ML": 0} for d in days}
+        series = {d: {"date": d, **{p: 0 for p in POOLS.values()}} for d in days}
         for v in views:
             f = str(v.get("first_seen") or "")[:10]
             if f in series:
@@ -522,6 +532,9 @@ class Candidates:
         month_ago = days[0]
         by = lambda key, opts: {o: sum(1 for v in views if v[key] == o) for o in opts}
         recent = sorted(views, key=lambda v: str(v["updated_at"]), reverse=True)[:8]
+        lights = [self.light(v) | {"phone_source": self._phone_source(v), "found_at": str(v.get("apollo_checked_at") or v.get("app_updated_at") or v.get("last_updated") or "")[:16]}
+                  for v in views if v.get("phone") or v.get("apollo_phone")]
+        with_phone = sorted([x for x in lights if x["phone"]], key=lambda x: x["found_at"], reverse=True)
         return {
             "total": len(views),
             "pools": {p: sum(1 for v in views if v["pool"] == p) for p in POOLS.values()},
@@ -536,8 +549,21 @@ class Candidates:
             "cities": self._top(views, "city", 7),
             "experience": {b: sum(1 for v in views if (v.get("experience_bucket") or "Unknown") == b) for b in ("0-2", "2-5", "5-8", "8+", "Unknown")},
             "recent": [self.light(v) for v in recent],
+            "contacts": {"phones": len(with_phone),
+                         "emails": sum(1 for v in views if scoring.has_value("email", v.get("email"))),
+                         "both": sum(1 for x in with_phone if x["has_email"]),
+                         "list": with_phone[:100]},
             "today": t,
         }
+
+    @staticmethod
+    def _phone_source(v):
+        s = f"{v.get('phone_status') or ''} {v.get('contact_source') or ''}".lower()
+        if v.get("apollo_phone") or "apollo" in s:
+            return "Apollo"
+        if "phone" in (v.get("manual_fields") or []):
+            return "Added on website"
+        return "Sheet"
 
     @staticmethod
     def _top(views, key, n):
@@ -565,6 +591,8 @@ class Candidates:
                     "new": len(new),
                     "new_sn": sum(1 for v in new if v["pool"] == "ServiceNow"),
                     "new_ai": sum(1 for v in new if v["pool"] == "AI/ML"),
+                    "new_sf": sum(1 for v in new if v["pool"] == "Salesforce"),
+                    "new_wd": sum(1 for v in new if v["pool"] == "Workday"),
                     "enriched": sum(1 for v in views if self._enriched_on(v, d)),
                     "refreshed": sum(1 for v in views if str(v.get("last_checked") or "") == d),
                     "changed": sum(1 for v in views if str(v.get("last_change") or "").startswith(d)),

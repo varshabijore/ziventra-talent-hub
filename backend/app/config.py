@@ -19,6 +19,11 @@ SN_MONGODB_URI = env("SN_MONGODB_URI")             # sir's ServiceNow cluster
 AI_MONGODB_URI = env("AI_MONGODB_URI")             # sir's AI/ML cluster
 SN_DB = env("SN_DB", "servicenow")
 AI_DB = env("AI_DB", "ai_ml")
+# Salesforce + Workday (new cluster). Leave empty until the cluster is ready: the pools then just show 0 candidates.
+SF_MONGODB_URI = env("SF_MONGODB_URI")
+WD_MONGODB_URI = env("WD_MONGODB_URI") or SF_MONGODB_URI   # same cluster is fine
+SF_DB = env("SF_DB", "salesforce")
+WD_DB = env("WD_DB", "workday")
 CANDIDATE_COLLECTION = env("CANDIDATE_COLLECTION", "candidates_master")
 APP_DB = env("APP_DB", "talent_app")               # users, logs, settings live here (ServiceNow cluster)
 JWT_SECRET = env("JWT_SECRET", "change-me-in-render")

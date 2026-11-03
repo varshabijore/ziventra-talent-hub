@@ -7,7 +7,7 @@ import re
 # ---------- export ----------
 EXPORT_COLS = [
     ("name", "Name"), ("pool", "Pool"), ("linkedin_url", "LinkedIn URL"), ("current_title", "Current title"),
-    ("current_company", "Current company"), ("city", "City"), ("state", "State"),
+    ("current_company", "Current company"), ("city", "City"), ("state", "State"), ("country", "Country"),
     ("total_experience_years", "Total experience (yrs)"), ("domain_experience_years", "Domain experience (yrs)"),
     ("experience_bucket", "Experience bucket"), ("seniority", "Seniority"), ("standard_title", "Standard title"),
     ("certifications", "Certifications"), ("skills", "Skills"), ("modules_specialization", "Modules / specialization"),
@@ -68,8 +68,9 @@ IMPORTABLE = {  # field -> header words that mean it
     "current_company": ["current company", "company", "employer", "organisation", "organization", "company name"],
     "city": ["city", "location", "current location"],
     "state": ["state"],
+    "country": ["country", "nation"],
     "total_experience_years": ["total experience", "experience", "total exp", "exp", "experience years", "total experience yrs", "years of experience"],
-    "domain_experience_years": ["domain experience", "relevant experience", "servicenow experience", "ai ml experience", "domain experience yrs", "relevant exp"],
+    "domain_experience_years": ["domain experience", "relevant experience", "servicenow experience", "ai ml experience", "salesforce experience", "workday experience", "domain experience yrs", "relevant exp"],
     "certifications": ["certifications", "certification", "certificates"],
     "skills": ["skills", "skill", "key skills"],
     "modules_specialization": ["modules", "specialization", "modules specialization"],
@@ -81,7 +82,7 @@ IMPORTABLE = {  # field -> header words that mean it
 }
 FIELD_LABELS = {
     "name": "Name", "linkedin_url": "LinkedIn URL", "pool": "Pool", "email": "Email", "phone": "Phone",
-    "current_title": "Current title", "current_company": "Current company", "city": "City", "state": "State",
+    "current_title": "Current title", "current_company": "Current company", "city": "City", "state": "State", "country": "Country",
     "total_experience_years": "Total experience (yrs)", "domain_experience_years": "Domain experience (yrs)",
     "certifications": "Certifications", "skills": "Skills", "modules_specialization": "Modules / specialization",
     "open_to_work": "Open to work", "standard_title": "Standard title", "seniority": "Seniority",
@@ -169,6 +170,10 @@ def clean_pool(v, default):
     s = _norm(v)
     if "servicenow" in s.replace(" ", "") or s in ("sn", "snow"):
         return "ServiceNow"
+    if "salesforce" in s.replace(" ", "") or s in ("sf", "sfdc"):
+        return "Salesforce"
+    if "workday" in s or s == "wd":
+        return "Workday"
     if s in ("ai", "ml", "ai ml", "aiml") or "machine" in s or "ai" in s.split():
         return "AI/ML"
     return default

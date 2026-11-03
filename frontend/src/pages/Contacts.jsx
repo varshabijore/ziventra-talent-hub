@@ -21,11 +21,12 @@ function lastLine(j) {
 
 function Card({ j, single }) {
   const l = j.last;
-  const [cls, label] = !j.logged ? ["mute", "Not connected yet"] : HEALTH[l.status] || HEALTH.ok;
+  const [cls, label] = j.paused ? ["mute", "Paused"] : !j.logged ? ["mute", "Not connected yet"] : HEALTH[l.status] || HEALTH.ok;
   return (
     <div className={"panel jcard2 " + cls}>
       <div className="jhead"><h3>{j.job === "Apollo" ? "Apollo · phone" : "Treg · email"}</h3><span className={"pill " + cls}><span className="pdot" />{label}</span></div>
       <p className="jwhat">{j.what}</p>
+      {j.paused && <div className="jwarn">⏸ {j.paused}</div>}
       {j.logged ? (
         <>
           <p className="jlast">{lastLine(j)}</p>
@@ -39,7 +40,7 @@ function Card({ j, single }) {
       ) : (
         <p className="jlast muted">{j.job === "Apollo" ? "No Apollo run yet. Import the Apollo workflow in n8n and run it." : "No Treg run yet. Import the Treg workflow in n8n, add the Treg key and run it."}</p>
       )}
-      <div className="jfoot"><Icon name="cal" size={13} /> {j.schedule.length ? <>Runs daily at <b>{j.schedule.join(", ")}</b><span className="muted"> (after Publish in n8n)</span></>
+      <div className="jfoot"><Icon name="cal" size={13} /> {j.paused ? <><b>Paused</b><span className="muted"> · waiting for the plan upgrade</span></> : j.schedule.length ? <>Runs daily at <b>{j.schedule.join(", ")}</b><span className="muted"> (after Publish in n8n)</span></>
         : <><b>Runs manually</b><span className="muted"> · start it in n8n (limited credits)</span></>}</div>
     </div>
   );

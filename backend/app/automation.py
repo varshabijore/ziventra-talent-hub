@@ -21,6 +21,8 @@ SCHEDULE = {
     "Apollo": [],  # manual: started by hand in n8n (few credits)
     "Treg": ["19:11"],
 }
+# Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
+PAUSED = {"Apollo": "Paused until sir upgrades the Apollo plan. The free credits are used up (they refresh on 27 Nov). Do not run it in n8n."}
 JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
 WHAT = {
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
@@ -77,6 +79,10 @@ def parse(doc):
     r["rejected"] = _int(d.get("rejected"))
     m = re.search(r"(\d+)\s*ServiceNow\s*\+\s*(\d+)\s*AI/ML", notes)
     r["new_sn"], r["new_ai"] = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+    m3 = re.search(r"(\d+)\s*Salesforce\s*\+\s*(\d+)\s*Workday", notes)
+    r["new_sf"], r["new_wd"] = (int(m3.group(1)), int(m3.group(2))) if m3 else (0, 0)
+    rg = re.search(r"Region:\s*(\w+)", notes)
+    r["region"] = rg.group(1) if rg else ""
     reasons = {k: int(v) for k, v in re.findall(r"(not_india|wrong_title|recruiter|no_name|duplicate)\s+(\d+)", notes)}
     r["reasons"] = reasons
     r["duplicates"] = reasons.get("duplicate", 0)
@@ -90,7 +96,7 @@ def parse(doc):
     r["new"] = r["enriched"] = r["synced"] = 0
     r["matched"] = r["emails_added"] = r["credits"] = r["work_found"] = r["personal_found"] = 0
     if job == "Scraping":
-        r["new"] = _int(added) if added else (r["new_sn"] + r["new_ai"] or _int(notes))
+        r["new"] = _int(added) if added else (r["new_sn"] + r["new_ai"] + r["new_sf"] + r["new_wd"] or _int(notes))
         if not r["found"] and r["new"]:
             r["found"] = r["new"] + r["rejected"]
     elif job == "Enrichment":
@@ -152,7 +158,8 @@ def parse(doc):
         iss.append("Refresh ran but checked 0 profiles")
     r["status"] = "error" if r["error"] else "warning" if iss else "ok"
     # fields the Daily record page uses
-    r["result"] = (f"{r['new']} new ({r['new_sn']} ServiceNow + {r['new_ai']} AI/ML)" if job == "Scraping"
+    split = " + ".join(f"{n} {lbl}" for n, lbl in ((r["new_sn"], "ServiceNow"), (r["new_ai"], "AI/ML"), (r["new_sf"], "Salesforce"), (r["new_wd"], "Workday")) if n or lbl in ("ServiceNow", "AI/ML"))
+    r["result"] = (f"{r['new']} new ({split})" if job == "Scraping"
                    else f"{r['enriched']} enriched, {r['rejected']} rejected" if job == "Enrichment"
                    else f"{r['checked']} checked, {r['changed']} changed" if job == "Refresh"
                    else f"{r['matched']} matched, {r['emails_added']} emails added, ~{r['credits']} credits" if job == "Apollo"
@@ -238,7 +245,8 @@ def report(runs_raw, errors_raw, start, end):
     return {
         "now": now.strftime("%Y-%m-%d %H:%M"), "start": start, "end": end, "days": ndays, "today": today,
         "totals": {"runs": len(runs), "new": sum(r["new"] for r in runs), "new_sn": sum(r["new_sn"] for r in runs),
-                   "new_ai": sum(r["new_ai"] for r in runs), "enriched": sum(r["enriched"] for r in runs),
+                   "new_ai": sum(r["new_ai"] for r in runs), "new_sf": sum(r["new_sf"] for r in runs),
+                   "new_wd": sum(r["new_wd"] for r in runs), "enriched": sum(r["enriched"] for r in runs),
                    "checked": sum(r["checked"] for r in runs), "changed": sum(r["changed"] for r in runs),
                    "cost": round(sum(r["cost"] for r in runs), 2),
                    "issues": sum(1 for r in runs if r["status"] != "ok") + len(missed) + len(errors),
@@ -258,10 +266,10 @@ def _card(job, runs, allruns, now, ndays):
     ok = sum(1 for r in mine if r["status"] == "ok")
     out = {"Scraping": "new", "Enrichment": "enriched", "Apollo": "matched", "Treg": "emails_added"}.get(job, "checked")
     return {
-        "job": job, "what": WHAT[job], "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
+        "job": job, "what": WHAT[job], "paused": PAUSED.get(job, ""), "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
         "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
         "health": round(100 * ok / len(mine)) if mine else None,
-        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai",
+        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai", "new_sf", "new_wd",
                                        "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost", "matched",
                                        "emails_added", "credits", "work_found", "personal_found")} if last else None,
         "output": sum(r[out] for r in mine),

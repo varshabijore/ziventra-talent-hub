@@ -4,6 +4,7 @@ import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import Contacts from "./Contacts.jsx";
+const split = (x, sep = ", ") => [[x.new_sn, "ServiceNow"], [x.new_ai, "AI/ML"], [x.new_sf, "Salesforce"], [x.new_wd, "Workday"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${n || 0} ${l}`).join(sep);
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -19,7 +20,7 @@ const HEALTH = { ok: ["good", "Working fine"], warning: ["warn", "Needs attentio
 function lastLine(j) {
   const l = j.last;
   const when = `${day(l.date)}, ${l.time}`;
-  if (j.job === "Scraping") return <>Last ran <b>{when}</b> and added <b>{l.new} new candidates</b> ({l.new_sn} ServiceNow, {l.new_ai} AI/ML).</>;
+  if (j.job === "Scraping") return <>Last ran <b>{when}</b> and added <b>{l.new} new candidates</b> ({split(l)}).</>;
   if (j.job === "Enrichment") return <>Last ran <b>{when}</b> and enriched <b>{l.enriched} profiles</b>{l.emails_valid ? <>, {l.emails_valid} with a valid email</> : null}.</>;
   if (j.job === "Refresh") return <>Last ran <b>{when}</b> and re-checked <b>{l.checked} profiles</b>; {l.changed} had LinkedIn changes.</>;
   if (j.job === "Apollo") return <>Last ran <b>{when}</b> and matched <b>{l.matched} of {l.found} candidates</b>; {l.emails_added} new email{l.emails_added === 1 ? "" : "s"} added (~{l.credits} credits).</>;
@@ -106,7 +107,7 @@ export default function Automation({ query }) {
 
       <section className="kpis">
         <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs" value={fmt(w.runs)} sub={single ? "workflow runs that day" : `in ${d.days} days`} />
-        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={`${w.new_sn} ServiceNow · ${w.new_ai} AI/ML`} />
+        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={split(w, " · ")} />
         <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Enriched" value={fmt(w.enriched)} sub={`${w.emails_valid} with a valid email`} />
         <Kpi icon="refresh" bg="var(--info-soft)" fg="var(--info)" label="Refreshed" value={fmt(w.checked)} sub={`${w.changed} LinkedIn changes`} />
         <Kpi icon="star" bg="var(--warn-soft)" fg="var(--warn)" label="Apify cost" value={money(w.cost)} sub={`${w.dup_rate}% of scraped results were duplicates`} />

@@ -265,7 +265,7 @@ async def import_candidates(request):
     guessed = transfer.guess_mapping(headers)
     mapping = {h: (data.get("mapping") or {}).get(h, guessed[h]) for h in headers}
     mapping = {h: (f if f in transfer.FIELD_LABELS else "") for h, f in mapping.items()}
-    pool = data.get("pool") if data.get("pool") in ("ServiceNow", "AI/ML") else ""
+    pool = data.get("pool") if data.get("pool") in ("ServiceNow", "AI/ML", "Salesforce", "Workday") else ""
     mode = data.get("mode") if data.get("mode") in ("fill", "overwrite", "skip") else "fill"
     commit = bool(data.get("commit"))
     if commit:

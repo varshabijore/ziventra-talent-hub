@@ -1,7 +1,7 @@
 /* Ziventra Talent Hub. Layout: left sidebar + main canvas; light and dark themes from tokens */
 :root{
   --bg:#F3F5FA; --panel:#FFFFFF; --ink:#18213A; --muted:#66708A; --line:#E3E7F0; --soft:#EEF1F8;
-  --brand:#4F46E5; --brand-ink:#FFFFFF; --brand-soft:#ECEBFF; --sn:#1F8A63; --sn-soft:#DDF3EA; --ai:#7C3AED; --ai-soft:#EFE6FF;
+  --brand:#4F46E5; --brand-ink:#FFFFFF; --brand-soft:#ECEBFF; --sn:#1F8A63; --sn-soft:#DDF3EA; --ai:#7C3AED; --ai-soft:#EFE6FF; --sf:#0B6FCC; --sf-soft:#DDEEFF; --wd:#C2570C; --wd-soft:#FFEBD8;
   --good:#15803D; --good-soft:#DCF5E5; --info:#2563EB; --info-soft:#DCE8FF; --warn:#B45309; --warn-soft:#FDF0D5; --bad:#DC2626; --bad-soft:#FDE2E2;
   --shadow:0 18px 50px rgba(15,19,34,.16);
   --font:"Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif; --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
@@ -9,12 +9,12 @@
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#0F1322; --panel:#171C2E; --ink:#E7EAF3; --muted:#9AA3BA; --line:#262D45; --soft:#1E2438;
-  --brand:#8B85FF; --brand-ink:#0F1322; --brand-soft:#26244A; --sn:#4CC795; --sn-soft:#173A2E; --ai:#B392FF; --ai-soft:#2E2347;
+  --brand:#8B85FF; --brand-ink:#0F1322; --brand-soft:#26244A; --sn:#4CC795; --sn-soft:#173A2E; --ai:#B392FF; --ai-soft:#2E2347; --sf:#5FB0FF; --sf-soft:#14304D; --wd:#FF9F57; --wd-soft:#43281A;
   --good:#4ADE80; --good-soft:#163524; --info:#7AA7FF; --info-soft:#1B2A4A; --warn:#F2B544; --warn-soft:#3A2C12; --bad:#F87171; --bad-soft:#3F1D1D;
   --shadow:0 18px 50px rgba(0,0,0,.45); color-scheme:dark }}
 :root[data-theme="dark"]{
   --bg:#0F1322; --panel:#171C2E; --ink:#E7EAF3; --muted:#9AA3BA; --line:#262D45; --soft:#1E2438;
-  --brand:#8B85FF; --brand-ink:#0F1322; --brand-soft:#26244A; --sn:#4CC795; --sn-soft:#173A2E; --ai:#B392FF; --ai-soft:#2E2347;
+  --brand:#8B85FF; --brand-ink:#0F1322; --brand-soft:#26244A; --sn:#4CC795; --sn-soft:#173A2E; --ai:#B392FF; --ai-soft:#2E2347; --sf:#5FB0FF; --sf-soft:#14304D; --wd:#FF9F57; --wd-soft:#43281A;
   --good:#4ADE80; --good-soft:#163524; --info:#7AA7FF; --info-soft:#1B2A4A; --warn:#F2B544; --warn-soft:#3A2C12; --bad:#F87171; --bad-soft:#3F1D1D;
   --shadow:0 18px 50px rgba(0,0,0,.45); color-scheme:dark }
 *{box-sizing:border-box}
@@ -127,7 +127,7 @@ main{padding-block:18px 32px;padding-left:max(24px,env(safe-area-inset-left,0px)
 .row .s{font-size:12px;color:var(--muted)}
 a.row:hover .t{color:var(--brand)}
 .chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;font-size:11px;font-weight:600;padding:2px 9px;white-space:nowrap;border:0}
-.c-sn{background:var(--sn-soft);color:var(--sn)} .c-ai{background:var(--ai-soft);color:var(--ai)}
+.c-sn{background:var(--sn-soft);color:var(--sn)} .c-ai{background:var(--ai-soft);color:var(--ai)} .c-sf{background:var(--sf-soft);color:var(--sf)} .c-wd{background:var(--wd-soft);color:var(--wd)}
 .c-good{background:var(--good-soft);color:var(--good)} .c-info{background:var(--info-soft);color:var(--info)}
 .c-warn{background:var(--warn-soft);color:var(--warn)} .c-bad{background:var(--bad-soft);color:var(--bad)} .c-mute{background:var(--soft);color:var(--muted)}
 .c-brand{background:var(--brand-soft);color:var(--brand)}
@@ -860,3 +860,11 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 [data-theme="dark"] .clogo:has(img){background:#fff}
 /* tablet: keep Cards / Table toggle visible, table scrolls sideways */
 @media (max-width:760px){.vtoggle{display:inline-flex !important}.ptbl{overflow-x:auto}.ptbl table{min-width:760px}}
+/* v8: add button keeps its size on phones */
+.tbtns .addbtn{flex-shrink:0;min-width:40px;min-height:38px;justify-content:center}.addic{flex-shrink:0}
+
+/* v9: dashboard row with 4 panels (phone numbers found) */
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.phonev{white-space:nowrap;font-weight:600;color:var(--sn)}
+@media (max-width:1300px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1100px){.grid4{grid-template-columns:minmax(0,1fr)}}

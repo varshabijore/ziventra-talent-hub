@@ -2,7 +2,8 @@
 import copy, datetime as dt, uuid
 from . import config
 
-POOLS = {"sn": "ServiceNow", "ai": "AI/ML"}
+POOLS = {"sn": "ServiceNow", "ai": "AI/ML", "sf": "Salesforce", "wd": "Workday"}
+POOL_KEY = {v: k for k, v in POOLS.items()}
 
 
 def now():
@@ -18,6 +19,11 @@ class MongoStore:
         sn = MongoClient(config.SN_MONGODB_URI, serverSelectionTimeoutMS=10000)
         ai = MongoClient(config.AI_MONGODB_URI, serverSelectionTimeoutMS=10000) if config.AI_MONGODB_URI else sn
         self.cand = {"sn": sn[config.SN_DB][config.CANDIDATE_COLLECTION], "ai": ai[config.AI_DB][config.CANDIDATE_COLLECTION]}
+        clients = {}
+        for key, uri, name in (("sf", config.SF_MONGODB_URI, config.SF_DB), ("wd", config.WD_MONGODB_URI, config.WD_DB)):
+            if uri:   # new pools are optional until their cluster exists
+                clients[uri] = clients.get(uri) or MongoClient(uri, serverSelectionTimeoutMS=10000)
+                self.cand[key] = clients[uri][name][config.CANDIDATE_COLLECTION]
         db = sn[config.APP_DB]
         self.db = db
         self.users, self.activity, self.audit = db.users, db.activity, db.audit
@@ -86,14 +92,19 @@ class MongoStore:
         return [{k: v for k, v in d.items() if k != "_id"} for d in self.db.n8n_errors.find({"at": {"$gte": day}}).limit(500)]
 
     # candidates
+    def has_pool(self, pool): return pool in self.cand
     def candidates(self, pool):
         out = []
+        if pool not in self.cand:
+            return out
         for d in self.cand[pool].find({}):
             d["_id"] = str(d["_id"])
             out.append(d)
         return out
     def candidate_set(self, pool, cid, fields): self.cand[pool].update_one({"_id": self._id(cid)}, {"$set": fields})
     def candidate_insert(self, pool, doc):
+        if pool not in self.cand:
+            raise ValueError(f"{POOLS[pool]} database is not connected yet")
         return str(self.cand[pool].insert_one(dict(doc)).inserted_id)
 
 
@@ -102,7 +113,7 @@ class MemoryStore:
     def __init__(self, seed=None):
         self._users, self._activity, self._audit, self._bm, self._runs = {}, [], [], set(), []
         self._settings = {}
-        self._cand = {"sn": {}, "ai": {}}
+        self._cand = {k: {} for k in POOLS}
         if seed:
             seed(self)
 
@@ -144,6 +155,7 @@ class MemoryStore:
     def runs_since(self, day): return copy.deepcopy([r for r in self._runs if (r.get("date") or str(r.get("run_at", ""))[:10]) >= day])
     def errors_since(self, day): return copy.deepcopy([e for e in getattr(self, "_errors", []) if str(e.get("at", "")) >= day])
 
+    def has_pool(self, pool): return pool in self._cand
     def candidates(self, pool): return copy.deepcopy(list(self._cand[pool].values()))
     def candidate_set(self, pool, cid, fields):
         d = self._cand[pool][cid]
