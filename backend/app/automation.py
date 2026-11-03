@@ -19,7 +19,7 @@ SCHEDULE = {
     "Refresh": ["15:41", "20:41"],
     "Sync": ["10:45", "13:45", "16:45", "19:45"],
     "Apollo": [],  # manual: started by hand in n8n (few credits)
-    "Treg": ["19:11"],
+    "Treg": [],  # manual: started by hand in n8n in batches (backlog too big for a fixed daily run)
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
 PAUSED = {"Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
@@ -30,7 +30,7 @@ WHAT = {
     "Refresh": "Re-checks enriched profiles older than 30 days for LinkedIn changes",
     "Sync": "Copies the master sheet into MongoDB (what this website reads)",
     "Apollo": "Finds the personal mobile number from Apollo (run by hand, limited credits)",
-    "Treg": "Finds work and personal email through Treg for enriched candidates",
+    "Treg": "Finds work and personal email through Treg for enriched candidates (run by hand in batches)",
 }
 
 
@@ -71,7 +71,7 @@ def parse(doc):
     job = job_of(d.get("flow", ""), d.get("job", ""))
     r = {"run_at": f"{date} {time}".strip(), "date": date, "time": time, "job": job,
          "source": "claude" if "claude" in str(d.get("flow", "")).lower() else "n8n",
-         "cost": _float(d.get("cost")), "notes": notes, "issues": [], "error": d.get("error") or ""}
+         "cost": _float(d.get("cost")), "notes": notes, "issues": [], "info": "", "error": d.get("error") or ""}
     added = str(d.get("added", ""))
     r["queries"] = _int(d.get("queries"))
     r["google_results"] = _int(d.get("google_results"))
@@ -152,7 +152,11 @@ def parse(doc):
         if r["checked"] and r["work_found"] + r["personal_found"] == 0:
             iss.append("Treg found no emails for these candidates")
         em = re.search(r"Error:\s*(.+)$", notes)
-        if em:
+        if em and r["work_found"] + r["personal_found"] > 0:
+            # some lookups failed (e.g. a slow provider timed out) but the run worked; those candidates are retried next run
+            r["info"] = ("Some lookups timed out (" if "timeout" in em.group(1).lower() else "Some lookups failed (") + em.group(1)[:120] + \
+                "). Those candidates were left unchanged and are retried on the next run."
+        elif em:
             iss.append("Treg error: " + em.group(1)[:160])
     elif job == "Refresh" and r["checked"] == 0 and not r["error"]:
         iss.append("Refresh ran but checked 0 profiles")
@@ -269,7 +273,7 @@ def _card(job, runs, allruns, now, ndays):
         "job": job, "what": WHAT[job], "paused": PAUSED.get(job, ""), "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
         "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
         "health": round(100 * ok / len(mine)) if mine else None,
-        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "new", "new_sn", "new_ai", "new_sf", "new_wd",
+        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "info", "new", "new_sn", "new_ai", "new_sf", "new_wd",
                                        "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost", "matched",
                                        "emails_added", "credits", "work_found", "personal_found")} if last else None,
         "output": sum(r[out] for r in mine),

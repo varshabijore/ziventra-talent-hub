@@ -31,6 +31,7 @@ function Card({ j, single }) {
         <>
           <p className="jlast">{lastLine(j)}</p>
           {l.issues.length > 0 && <div className="jwarn">{l.issues.map((x, k) => <div key={k}>⚠ {x}</div>)}</div>}
+          {l.info && <p className="small muted" style={{ margin: "0 0 10px" }}>ℹ {l.info}</p>}
           <div className="jstats">
             <div><b>{j.runs}{j.expected ? <small> / {j.expected}</small> : null}</b><span>runs {single ? "that day" : "in these days"}</span></div>
             <div><b>{fmt(j.job === "Apollo" ? j.output : j.output)}</b><span>{j.job === "Apollo" ? "people matched" : "emails added to sheet"}</span></div>
@@ -41,7 +42,7 @@ function Card({ j, single }) {
         <p className="jlast muted">{j.job === "Apollo" ? "No Apollo run yet. Import the Apollo workflow in n8n and run it." : "No Treg run yet. Import the Treg workflow in n8n, add the Treg key and run it."}</p>
       )}
       <div className="jfoot"><Icon name="cal" size={13} /> {j.paused ? <><b>Paused</b><span className="muted"> · credit limit reached</span></> : j.schedule.length ? <>Runs daily at <b>{j.schedule.join(", ")}</b><span className="muted"> (after Publish in n8n)</span></>
-        : <><b>Runs manually</b><span className="muted"> · start it in n8n (limited credits)</span></>}</div>
+        : <><b>Runs manually</b><span className="muted"> · {j.job === "Treg" ? "start it in n8n when needed (paid per email found)" : "start it in n8n (limited credits)"}</span></>}</div>
     </div>
   );
 }
