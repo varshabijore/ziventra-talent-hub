@@ -2,7 +2,7 @@
 Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`, which n8n never touches,
 and the screen always shows the manual value when there is one."""
 import datetime as dt, re, threading, time
-from . import automation, config, scoring, transfer
+from . import automation, config, scoring, smart, transfer
 from .store import POOLS, POOL_KEY, now
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -207,6 +207,7 @@ class Candidates:
         in_pool = [v for v in views if not pool or v["pool"] == pool]
         q = (p.get("q") or "").lower().strip()
         min_s, max_s = int(p.get("min_score") or 0), int(p.get("max_score") or 100)
+        min_exp, max_exp = num(p.get("min_exp")), num(p.get("max_exp"))
         days = int(p.get("updated_within") or 0)
         since = (dt.datetime.now(IST) - dt.timedelta(days=days)).date().isoformat() if days else ""
         yes = lambda k: str(p.get(k) or "").lower() in ("1", "true", "yes")
@@ -218,6 +219,10 @@ class Candidates:
             for key, field in (("city", "city"), ("country", "country"), ("role", "role_category"), ("bucket", "experience_bucket"),
                                ("data_status", "data_status")):
                 if p.get(key) and str(v.get(field) or "") != p[key]:
+                    return False
+            if min_exp is not None or max_exp is not None:
+                yrs = v.get("domain_experience_years") if v.get("domain_experience_years") is not None else v.get("total_experience_years")
+                if yrs is None or (min_exp is not None and yrs < min_exp) or (max_exp is not None and yrs > max_exp):
                     return False
             if not (min_s <= v["percent"] <= max_s):
                 return False
@@ -271,6 +276,35 @@ class Candidates:
                   "data_status": DATA_STATUS}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,
                 "pages": max(1, -(-len(rows) // size)), "stats": stats, "facets": facets}
+
+    def smart(self, text, user_id):
+        """Plain-English search -> filters + how many match + a few people to jump to."""
+        views = self.all_views(user_id)
+        cities = {v["city"] for v in views if v.get("city")}
+        countries = {v["country"] for v in views if v.get("country")}
+        parsed = smart.parse(text, cities, countries)
+        p = dict(parsed["params"])
+        res = self.search({**p, "size": 5, "sort": p.get("sort") or "score"}, user_id)
+        out = {"query": text, "filters": parsed["params"], "chips": parsed["chips"], "text": parsed["text"],
+               "count": res["stats"]["total"], "people": res["items"]}
+        # nothing matches every filter: offer the closest search with one filter less
+        if not out["count"] and len(p) > 1:
+            names = {"role": "role", "min_exp": "experience", "max_exp": "experience", "city": "city", "country": "country", "q": "keywords",
+                     "has_email": "email", "has_phone": "phone", "certified": "certified", "open_to_work": "open to work", "data_status": "status"}
+            best = None
+            for k in [k for k in ("role", "min_exp", "city", "q", "has_phone", "has_email", "certified", "open_to_work", "data_status", "country") if k in p]:
+                f = {x: y for x, y in p.items() if x != k and not (k == "min_exp" and x == "max_exp")}
+                n = self.search({**f, "size": 1}, user_id)["stats"]["total"]
+                if n and (not best or n > best["count"]):
+                    best = {"without": names.get(k, k), "count": n, "filters": f}
+            out["relaxed"] = best
+        # a name typed on its own: also offer people whose NAME matches, even if the free-text search missed them
+        t = str(text or "").strip().lower()
+        if len(t) >= 2 and not parsed["chips"]:
+            named = [self.light(v) for v in views if t in str(v.get("name") or "").lower()][:5]
+            ids = {x["id"] for x in out["people"]}
+            out["people"] = (named + [x for x in out["people"] if x["id"] not in {n["id"] for n in named}])[:5] if named else out["people"]
+        return out
 
     def export_rows(self, p, user_id):
         """Same filters as the list, all pages (for CSV download)."""

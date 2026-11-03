@@ -1,4 +1,5 @@
 import { POOLS } from "../pools.js";
+import SmartSearch from "../components/SmartSearch.jsx";
 import { Avatar, BarChart, Donut, ErrorBox, HBars, Kpi, Loading, fmt, tone, when } from "../components/ui.jsx";
 import { useCached } from "../context/DataContext.jsx";
 
@@ -14,7 +15,8 @@ export default function Dashboard({ user }) {
   return (
     <div className="dash">
       <div className="top"><div><h1>{greet()}, {user.name.split(" ")[0]}</h1>
-        <p>Talent pool on {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p></div></div>
+        <p>Talent pool on {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p></div>
+        <SmartSearch /></div>
       <section className="kpis">
         <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Total candidates" value={fmt(d.total)} sub={`+${fmt(d.added_today)} added today`} up={d.added_today > 0} />
         <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Fully enriched" value={fmt(d.enriched)} sub={`+${fmt(d.enriched_today)} today`} up={d.enriched_today > 0} />

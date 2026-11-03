@@ -223,6 +223,15 @@ async def candidates(request):
     return ok(await run_in_threadpool(lambda: c.memo("search", p, lambda: c.search(p, u["id"]))))
 
 
+async def smart_search(request):
+    u = current_user(request)
+    text = str(request.query_params.get("q") or "")[:200]
+    if not text.strip():
+        return ok({"query": "", "filters": {}, "chips": [], "count": 0, "people": []})
+    c = S["cand"]
+    return ok(await run_in_threadpool(lambda: c.memo("smart", {"q": text}, lambda: c.smart(text, u["id"]))))
+
+
 async def export(request):
     """GET: all candidates matching the filters (CSV). POST {ids?, filters?, format: csv|xlsx, contact: bool}: chosen ones."""
     u = current_user(request)
@@ -402,6 +411,7 @@ routes = [
     Route("/api/daily", daily),
     Route("/api/automation", automation_page),
     Route("/api/contacts", contacts_page),
+    Route("/api/search", smart_search),
     Route("/api/candidates", candidates, methods=["GET", "POST"]),
     Route("/api/candidates/delete", delete_candidates, methods=["POST"]),
     Route("/api/candidates/export", export, methods=["GET", "POST"]),

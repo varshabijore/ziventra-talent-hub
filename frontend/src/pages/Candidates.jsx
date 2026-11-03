@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, qs } from "../api.js";
 import { ExportModal, ImportModal } from "../components/Transfer.jsx";
 import { Avatar, ErrorBox, Icon, Loading, Modal, PoolChip, StatusChip, fmt, tone, useSmall, useToast, when } from "../components/ui.jsx";
@@ -6,8 +6,14 @@ import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import { POOL_NAMES } from "../pools.js";
 
-const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "",
+const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "", min_exp: "", max_exp: "",
   open_to_work: false, certified: false, has_email: false, has_phone: false, in_role: false, sort: "updated", dir: "desc", page: 1 };
+// filters can come in the address (from the Dashboard smart search): /candidates?pool=Salesforce&city=Pune&has_email=1
+const fromQuery = (query) => {
+  const f = { ...DEFAULT };
+  for (const k of Object.keys(DEFAULT)) if (query.has(k)) f[k] = typeof DEFAULT[k] === "boolean" ? query.get(k) === "1" : query.get(k);
+  return f;
+};
 const CHECKS = [["open_to_work", "Open to work"], ["certified", "Certified"], ["has_email", "Email"], ["has_phone", "Phone"], ["in_role", "In role now"]];
 const href = (id) => "/candidate/" + encodeURIComponent(id);
 const store = { get: (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
@@ -70,21 +76,26 @@ function Card({ c, picked, onPick }) {
 
 export default function Candidates({ query }) {
   const data = useData();
-  const [F, setF] = useState(() => ({ ...DEFAULT, first_seen: query.get("first_seen") || "", has_phone: query.get("has_phone") === "1" }));
+  const [F, setF] = useState(() => fromQuery(query));
+  const urlKey = query.toString();
   const [viewPick, setView] = useState(() => store.get("cand_view", "cards"));
   const small = useSmall();
   const phone = useSmall("(max-width: 560px)");
   const view = phone ? "cards" : viewPick; // only phones always get cards; tablets can switch
   const [q, setQ] = useState(F.q);
 
-  const dayParam = query.get("first_seen") || "";
-  useEffect(() => { setF((f) => (f.first_seen === dayParam ? f : { ...f, first_seen: dayParam, page: 1 })); }, [dayParam]);
+  // a new search from the Dashboard while this page is open: start again from the address's filters
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const f = fromQuery(new URLSearchParams(urlKey)); setF(f); setQ(f.q);
+  }, [urlKey]);
   useEffect(() => { const t = setTimeout(() => setF((f) => (f.q === q ? f : { ...f, q, page: 1 })), 250); return () => clearTimeout(t); }, [q]);
 
 
   const { data: r, error, reload } = useCached("/candidates" + qs({ ...F, size: view === "table" ? 10 : small ? 6 : 12 }), { keep: true });
   const set = (k, v) => setF((f) => ({ ...f, [k]: v, ...(k === "country" ? { city: "" } : {}), page: 1 }));
-  const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (query.get("first_seen")) go("/candidates"); };
+  const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (urlKey) go("/candidates"); };
   const [picked, setPicked] = useState(() => new Set());
   const [modal, setModal] = useState("");
   const [busyDel, setBusyDel] = useState(false);
@@ -114,7 +125,7 @@ export default function Candidates({ query }) {
     </select>
   );
   const LBL = { role: (v) => v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v,
-    min_score: (v) => v + "%+ complete", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
+    min_score: (v) => v + "%+ complete", min_exp: (v) => v + "+ yrs exp", max_exp: (v) => "up to " + v + " yrs", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
   const activeChips = [...Object.keys(LBL).filter((k) => F[k]).map((k) => [k, LBL[k](F[k])]), ...CHECKS.filter(([k]) => F[k])];
   const moreCount = activeChips.length;
   const activeCount = moreCount + (F.pool ? 1 : 0) + (F.city ? 1 : 0) + (F.country ? 1 : 0) + (F.q ? 1 : 0);
