@@ -203,7 +203,7 @@ export default function Candidate({ id, query }) {
           <div className="foot small muted">
             <div>Data status <b>{c.data_status}</b> is set by the automation.</div>
             <div>Last updated {when(c.updated_at)} by {c.updated_by}.</div>
-            {c.first_seen && <div>First found {when(String(c.first_seen).slice(0, 10))}{c.source_flow ? " via " + c.source_flow : ""}.</div>}
+            {c.first_seen && <div>First found {when(String(c.first_seen).slice(0, 10))}{c.source_flow ? " via " + ({ claude: "the first bulk import (Oct 2026)", n8n: "n8n automation" }[String(c.source_flow).toLowerCase()] || c.source_flow) : ""}.</div>}
           </div>
         </aside>
 

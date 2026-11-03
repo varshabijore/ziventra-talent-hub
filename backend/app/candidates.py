@@ -1,7 +1,7 @@
 """Candidate logic: merge automation data with people's edits, filters, KPI cards, dashboard and daily numbers.
 Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`, which n8n never touches,
 and the screen always shows the manual value when there is one."""
-import datetime as dt, threading, time
+import datetime as dt, re, threading, time
 from . import automation, config, scoring, transfer
 from .store import POOLS, POOL_KEY, now
 
@@ -27,6 +27,22 @@ def iso(v):
             v = v.replace(tzinfo=dt.timezone.utc)
         return v.isoformat()
     return str(v or "")
+
+
+DATE_KEYS = ("first_seen", "last_updated", "last_checked")
+FLOW_LABEL = {"claude": "first bulk import (Oct 2026)", "n8n": "n8n automation"}
+
+
+def fix_date(v):
+    """Google Sheets sometimes sends a date as a day number (46322 = 2026-10-27). Turn it back into YYYY-MM-DD."""
+    s = str(v if v is not None else "").strip()
+    if re.fullmatch(r"\d{5}(\.\d+)?", s) and 40000 < float(s) < 60000:
+        return (dt.date(1899, 12, 30) + dt.timedelta(days=int(float(s)))).isoformat()
+    return v
+
+
+def flow_label(v):
+    return FLOW_LABEL.get(str(v or "").strip().lower(), v or "automation")
 
 
 class Candidates:
@@ -56,6 +72,9 @@ class Candidates:
                     if u:
                         gone[u] = f"{key}:{d['_id']}"
                     continue
+                for k in DATE_KEYS:
+                    if k in d:
+                        d[k] = fix_date(d[k])
                 docs[f"{key}:{d['_id']}"] = d
         self._gone = gone
         return docs
@@ -375,7 +394,7 @@ class Candidates:
         if str(d.get("readiness")) == "Enriched":
             rows.append({"at": str(d.get("last_updated") or ""), "by": "n8n enrichment", "text": "Full LinkedIn profile added (Discovered → Enriched)", "kind": "auto"})
         if d.get("first_seen"):
-            rows.append({"at": str(d["first_seen"]), "by": str(d.get("source_flow") or "automation"), "text": "Candidate found" + (f" via search: {d['search_query']}" if d.get("search_query") else ""), "kind": "auto"})
+            rows.append({"at": str(d["first_seen"]), "by": flow_label(d.get("source_flow")), "text": "Candidate found" + (f" via search: {d['search_query']}" if d.get("search_query") else ""), "kind": "auto"})
         rows.sort(key=lambda r: r["at"], reverse=True)
         return rows
 
