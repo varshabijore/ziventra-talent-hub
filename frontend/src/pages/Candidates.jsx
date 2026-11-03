@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, qs } from "../api.js";
 import { ExportModal, ImportModal } from "../components/Transfer.jsx";
+import AddOption from "../components/AddOption.jsx";
 import { Avatar, ErrorBox, Icon, Loading, Modal, PoolChip, StatusChip, fmt, tone, useSmall, useToast, when } from "../components/ui.jsx";
 import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
@@ -119,8 +120,8 @@ export default function Candidates({ query }) {
   if (error && !r) return <ErrorBox error={error} retry={reload} />;
   if (!r) return <Loading />;
   const s = r.stats, f = r.facets;
-  const Sel = ({ k, label, opts }) => (
-    <select aria-label={label} value={String(F[k])} onChange={(e) => set(k, e.target.value)}>
+  const Sel = ({ k, label, opts, disabled, title }) => (
+    <select aria-label={label} value={String(F[k])} onChange={(e) => set(k, e.target.value)} disabled={disabled} title={title}>
       <option value="">{label}</option>{opts.map((o) => { const v = o.v ?? o; return <option key={v} value={v}>{o.l ?? o}</option>; })}
     </select>
   );
@@ -148,6 +149,7 @@ export default function Candidates({ query }) {
           <div className="actions"><button className="btn" type="button" onClick={() => setModal("")} disabled={busyDel}>Cancel</button>
             <button className="btn danger solid" type="button" onClick={delSelected} disabled={busyDel}><Icon name="trash" /> {busyDel ? "Deleting…" : "Delete"}</button></div>
         </Modal>)}
+      {modal === "option" && <AddOption onClose={() => { setModal(""); reload(); }} />}
       {modal === "import" && <ImportModal onClose={() => setModal("")} onDone={() => { data.invalidate("/candidates?", "/dashboard", "/daily"); reload(); }} />}
       <section className="kpis mini">
         <K hl l="Candidates" v={fmt(s.total)} sub={s.total === s.pool_total ? (F.pool ? F.pool + " only" : "all pools") : `of ${fmt(s.pool_total)} in ${F.pool || "pool"}`} />
@@ -164,9 +166,11 @@ export default function Candidates({ query }) {
           <div className="fsearch"><Icon name="search" size={16} />
             <input type="search" placeholder="Search name, title, company, skill, module…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
             {q && <button type="button" className="fclear" onClick={() => setQ("")} aria-label="Clear search">✕</button>}</div>
-          <Sel k="pool" label="All pools" opts={POOL_NAMES} />
-          <Sel k="country" label="All countries" opts={f.countries || []} />
-          <Sel k="city" label="All cities" opts={f.cities} />
+          <Sel k="pool" label="All pools" opts={f.pools || POOL_NAMES} />
+          <Sel k="country" label="All countries" opts={[...(f.countries || []).map((c) => ({ v: c, l: `${c} (${fmt(f.country_counts?.[c] || 0)})` })),
+            ...((f.other_countries || F.country === "Other") ? [{ v: "Other", l: `Other countries (${fmt(f.other_countries || 0)})` }] : [])]} />
+          <Sel k="city" label={F.country ? (F.country === "Other" ? "All cities (other countries)" : `All cities in ${F.country}`) : "Choose a country first"}
+            opts={F.country ? f.cities : F.city ? [F.city] : []} disabled={!F.country && !F.city} title={!F.country ? "Pick a country to see its cities" : undefined} />
           <button type="button" className={"btn fbtn" + (moreF ? " on" : "")} onClick={toggleMore} aria-expanded={moreF}>
             <Icon name="sliders" size={16} /><span>Filters</span>{moreCount > 0 && <b className="fcount">{moreCount}</b>}<Icon name="down" size={14} /></button>
           {activeCount > 0 && <button className="linkbtn freset" type="button" onClick={reset}>Clear all</button>}
@@ -179,6 +183,8 @@ export default function Candidates({ query }) {
               <label className="fl">Data status<Sel k="data_status" label="Any status" opts={f.data_status} /></label>
               <label className="fl">Profile complete<Sel k="min_score" label="Any profile %" opts={[{ v: "90", l: "90%+ complete" }, { v: "70", l: "70%+ complete" }, { v: "50", l: "50%+ complete" }]} /></label>
               <label className="fl">Updated<Sel k="updated_within" label="Any time" opts={[{ v: "1", l: "Updated today" }, { v: "7", l: "Last 7 days" }, { v: "30", l: "Last 30 days" }]} /></label>
+              <div className="fl"><span aria-hidden="true">&nbsp;</span><button type="button" className="btn addopt" onClick={() => setModal("option")}><Icon name="plus" size={15} /> Add option</button>
+                <span className="small muted">New pool or role, e.g. Python Developer</span></div>
             </div>
             <div className="fpills"><span className="flabel">Only show</span>
               {CHECKS.map(([k, l]) => <button key={k} type="button" className={"fpill" + (F[k] ? " on" : "")} aria-pressed={!!F[k]} onClick={() => set(k, !F[k])}>{F[k] && <Icon name="check" size={13} />}{l}</button>)}

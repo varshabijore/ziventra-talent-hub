@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { api } from "../api.js";
 import { Icon, Modal, fmt, useToast } from "./ui.jsx";
-import { POOL_NAMES } from "../pools.js";
+import { useAllPools } from "../pools.js";
 
 async function saveResponse(res, fallback) {
   const cd = res.headers.get("content-disposition") || "";
@@ -64,6 +64,7 @@ const MODES = [["fill", "Fill empty fields", "Add only what is missing; keep wha
   ["overwrite", "Overwrite", "Replace their details with the file's values"], ["skip", "Skip", "Leave existing candidates untouched"]];
 
 export function ImportModal({ onClose, onDone }) {
+  const { pools: allPools } = useAllPools();
   const toast = useToast();
   const fileRef = useRef(null);
   const [file, setFile] = useState(null);          // {name, data}
@@ -128,7 +129,7 @@ export function ImportModal({ onClose, onDone }) {
 
       <div className="row2">
         <label className="f">Pool for rows without a Pool column
-          <select value={pool} onChange={(e) => { setPool(e.target.value); setCheck(null); }}><option value="">Use the file's Pool column</option>{POOL_NAMES.map((p) => <option key={p}>{p}</option>)}</select></label>
+          <select value={pool} onChange={(e) => { setPool(e.target.value); setCheck(null); }}><option value="">Use the file's Pool column</option>{allPools.map((p) => <option key={p.name}>{p.name}</option>)}</select></label>
         <label className="f">If a candidate already exists (same LinkedIn URL)
           <select value={mode} onChange={(e) => { setMode(e.target.value); setCheck(null); }}>{MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           <span className="small muted">{MODES.find((m) => m[0] === mode)[2]}</span></label>

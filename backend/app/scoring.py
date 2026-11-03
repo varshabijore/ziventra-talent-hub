@@ -24,6 +24,7 @@ DEFAULT_FIELDS = [
 # extra editable fields that carry no points
 EXTRA_EDITABLE = [
     {"key": "standard_title", "label": "Standard title", "group": "Experience"},
+    {"key": "role_category", "label": "Role", "group": "Experience"},
     {"key": "seniority", "label": "Seniority", "group": "Experience", "options": ["Intern", "Junior", "Mid", "Senior", "Lead", "Manager"]},
     {"key": "state", "label": "State", "group": "Contact"},
     {"key": "country", "label": "Country", "group": "Contact"},

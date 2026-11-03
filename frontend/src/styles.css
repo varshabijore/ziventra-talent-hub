@@ -911,3 +911,13 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .ssnone{padding:14px;color:var(--muted);font-size:14px}
 @media (max-width:1100px){.ssearch{flex-basis:100%;max-width:none}}
 @media (max-width:560px){.ssbox kbd{display:none}.ssbox input{font-size:14px}}
+
+/* v13: added pools, add-option button and modal */
+.c-cx{background:var(--brand-soft);color:var(--brand)}
+.fl .addopt{border-style:dashed;justify-content:center;gap:6px;color:var(--brand);border-color:var(--brand)}
+.fl .addopt+.small{margin-top:4px;font-weight:400;text-transform:none;letter-spacing:0}
+.aoform{display:flex;flex-direction:column;gap:12px}
+.aolist{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.aorow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;background:var(--soft);border-radius:10px}
+.frow select:disabled{opacity:.6;cursor:not-allowed}
+.aoform .f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}.aoform input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:400;background:var(--panel);color:var(--ink)}.aoform input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}

@@ -69,6 +69,7 @@ IMPORTABLE = {  # field -> header words that mean it
     "city": ["city", "location", "current location"],
     "state": ["state"],
     "country": ["country", "nation"],
+    "role_category": ["role category", "role type", "job category", "speciality", "specialty"],
     "total_experience_years": ["total experience", "experience", "total exp", "exp", "experience years", "total experience yrs", "years of experience"],
     "domain_experience_years": ["domain experience", "relevant experience", "servicenow experience", "ai ml experience", "salesforce experience", "workday experience", "domain experience yrs", "relevant exp"],
     "certifications": ["certifications", "certification", "certificates"],
@@ -82,7 +83,7 @@ IMPORTABLE = {  # field -> header words that mean it
 }
 FIELD_LABELS = {
     "name": "Name", "linkedin_url": "LinkedIn URL", "pool": "Pool", "email": "Email", "phone": "Phone",
-    "current_title": "Current title", "current_company": "Current company", "city": "City", "state": "State", "country": "Country",
+    "current_title": "Current title", "current_company": "Current company", "city": "City", "state": "State", "country": "Country", "role_category": "Role",
     "total_experience_years": "Total experience (yrs)", "domain_experience_years": "Domain experience (yrs)",
     "certifications": "Certifications", "skills": "Skills", "modules_specialization": "Modules / specialization",
     "open_to_work": "Open to work", "standard_title": "Standard title", "seniority": "Seniority",
@@ -166,8 +167,14 @@ def clean_url(u):
     return f"https://www.linkedin.com/in/{m.group(1).lower()}" if m else ""
 
 
+EXTRA_POOLS = []   # pools added on the website; set by the caller before an import
+
+
 def clean_pool(v, default):
     s = _norm(v)
+    for name in EXTRA_POOLS:
+        if s and s == _norm(name):
+            return name
     if "servicenow" in s.replace(" ", "") or s in ("sn", "snow"):
         return "ServiceNow"
     if "salesforce" in s.replace(" ", "") or s in ("sf", "sfdc"):

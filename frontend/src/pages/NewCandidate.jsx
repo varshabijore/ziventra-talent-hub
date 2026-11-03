@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { Icon, useToast } from "../components/ui.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
-import { POOLS } from "../pools.js";
+import { useAllPools } from "../pools.js";
 
 const SECTIONS = [
   { title: "Basic details", hint: "Name and LinkedIn profile are required", fields: [
@@ -19,6 +19,7 @@ const SECTIONS = [
     { k: "current_title", l: "Current title", ph: "ServiceNow Developer" },
     { k: "current_company", l: "Current company", ph: "Infosys" },
     { k: "standard_title", l: "Standard title", ph: "ServiceNow Developer" },
+    { k: "role_category", l: "Role", ph: "Developer, Consultant, Data Engineer…", list: "role-list" },
     { k: "seniority", l: "Seniority", opts: ["Intern", "Junior", "Mid", "Senior", "Lead", "Manager"] },
     { k: "domain_experience_years", l: "Domain experience (yrs)", type: "number", ph: "e.g. 3.5", poolLabel: true },
     { k: "total_experience_years", l: "Total experience (yrs)", type: "number", ph: "e.g. 6" },
@@ -41,6 +42,7 @@ const SECTIONS = [
 export default function NewCandidate() {
   const toast = useToast();
   const data = useData();
+  const { pools: allPools, roles } = useAllPools();
   const [pool, setPool] = useState("");
   const [v, setV] = useState({ open_to_work: "Unknown" });
   const [err, setErr] = useState({});
@@ -81,7 +83,7 @@ export default function NewCandidate() {
     const props = { id: "n-" + f.k, value: v[f.k] ?? "", onChange: (e) => set(f.k, e.target.value), placeholder: f.ph, "aria-invalid": !!err[f.k] };
     const ctl = f.opts ? <select {...props}>{f.k !== "open_to_work" && <option value="">-</option>}{f.opts.map((o) => <option key={o}>{o}</option>)}</select>
       : f.area ? <textarea rows={2} {...props} />
-      : <input {...props} type={f.type === "number" ? "number" : f.type || "text"} step={f.type === "number" ? "0.1" : undefined} min={f.type === "number" ? "0" : undefined} />;
+      : <input {...props} list={f.list} type={f.type === "number" ? "number" : f.type || "text"} step={f.type === "number" ? "0.1" : undefined} min={f.type === "number" ? "0" : undefined} />;
     return (
       <label key={f.k} className={"f" + (f.area ? " full" : "") + (err[f.k] ? " bad" : "")}>
         <span>{f.poolLabel && pool ? `${pool} experience (yrs)` : f.l}{f.req && <em> *</em>}</span>{ctl}
@@ -106,7 +108,7 @@ export default function NewCandidate() {
       <section className="panel newc">
         <h2>Pool<em className="req"> *</em></h2>
         <div className="poolpick">
-          {POOLS.map(({ name: p, desc }) => (
+          {allPools.map(({ name: p, desc }) => (
             <button key={p} type="button" className={"poolopt" + (pool === p ? " on" : "")} aria-pressed={pool === p} onClick={() => { setPool(p); setErr({ ...err, pool: "" }); }}>
               <b>{p}</b><span>{desc}</span>
             </button>))}
@@ -114,6 +116,7 @@ export default function NewCandidate() {
         {err.pool && <span className="ferr">{err.pool}</span>}
       </section>
 
+      <datalist id="role-list">{[...new Set(["Developer", "Administrator", "Architect", "Consultant", "Tester", "BA", "Lead", ...roles])].map((r) => <option key={r} value={r} />)}</datalist>
       <div className="newgrid">
         {SECTIONS.map((s) => (
           <section key={s.title} className={"panel newc" + (["Basic details", "Skills", "Background"].includes(s.title) ? " wide" : "")}>

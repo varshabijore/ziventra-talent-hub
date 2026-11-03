@@ -53,7 +53,7 @@ export default function Daily({ query }) {
   };
   const cost = d.runs.reduce((a, r) => a + (Number(r.cost) || 0), 0);
   const all = d.lists?.[view.id] || [];
-  const poolTabs = [["", `All ${all.length}`], ...POOL_NAMES.map((p) => [p, all.filter((c) => c.pool === p).length]).filter(([p, n], i) => n || i < 2).map(([p, n]) => [p, `${p} ${n}`])];
+  const poolTabs = [["", `All ${all.length}`], ...[...new Set([...POOL_NAMES, ...all.map((c) => c.pool)])].map((p) => [p, all.filter((c) => c.pool === p).length]).filter(([p, n], i) => n || i < 2).map(([p, n]) => [p, `${p} ${n}`])];
 
   return (
     <>

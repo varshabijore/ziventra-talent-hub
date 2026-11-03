@@ -3,7 +3,7 @@ Automation (n8n) writes the normal fields. People's edits go to `manual.<field>`
 and the screen always shows the manual value when there is one."""
 import datetime as dt, re, threading, time
 from . import automation, config, scoring, smart, transfer
-from .store import POOLS, POOL_KEY, now
+from .store import CUSTOM_KEY, POOLS, POOL_KEY, STORAGE, now
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 HIRING = ["New", "Contacted", "Interested", "Shortlisted", "Placed", "Rejected"]
@@ -30,6 +30,8 @@ def iso(v):
 
 
 DATE_KEYS = ("first_seen", "last_updated", "last_checked")
+MAIN_COUNTRIES = 6          # the biggest countries get their own option; the rest are "Other"
+OTHER = "Other"
 FLOW_LABEL = {"claude": "first bulk import (Oct 2026)", "n8n": "n8n automation"}
 
 
@@ -65,7 +67,7 @@ class Candidates:
     # ---------- loading ----------
     def _load(self):
         docs, gone, errors, counts = {}, {}, {}, {}
-        for key in POOLS:
+        for key in STORAGE:
             try:
                 rows = self.store.candidates(key)
             except Exception as e:      # one pool's database down must not hide the other pools
@@ -84,7 +86,7 @@ class Candidates:
                         d[k] = fix_date(d[k])
                 docs[f"{key}:{d['_id']}"] = d
         self._gone = gone
-        self.status = {"pools": {POOLS[k]: {"connected": self.store.has_pool(k), "loaded": counts.get(k, 0), "error": errors.get(k, "")} for k in POOLS},
+        self.status = {"pools": {POOLS.get(k, "Added pools"): {"connected": self.store.has_pool(k), "loaded": counts.get(k, 0), "error": errors.get(k, "")} for k in STORAGE},
                        "loaded_at": dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")}
         return docs
 
@@ -143,6 +145,54 @@ class Candidates:
             self._fields = (time.time(), f)
         return f
 
+    # ---------- pools and roles people added on the website ----------
+    def options(self):
+        s = self.store.settings_get()
+        return {"pools": [dict(p) for p in s.get("custom_pools", [])], "roles": list(s.get("custom_roles", []))}
+
+    def pool_names(self):
+        return [*POOLS.values(), *[p["name"] for p in self.options()["pools"]]]
+
+    def pool_key(self, label):
+        if label in POOL_KEY:
+            return POOL_KEY[label]
+        return CUSTOM_KEY if any(p["name"] == label for p in self.options()["pools"]) else None
+
+    def add_option(self, kind, name, desc=""):
+        name = re.sub(r"\s+", " ", str(name or "")).strip()[:40]
+        if len(name) < 2:
+            return {"error": "Give a name of at least 2 letters"}
+        s = self.store.settings_get()
+        if kind == "pool":
+            if name.lower() in {p.lower() for p in self.pool_names()}:
+                return {"error": f"A pool called {name} already exists"}
+            s.setdefault("custom_pools", []).append({"name": name, "desc": str(desc or "").strip()[:80], "added": today_ist()})
+        elif kind == "role":
+            known = {str(v.get("role_category") or "").lower() for v in self.all_views()} | {r.lower() for r in s.get("custom_roles", [])}
+            if name.lower() in known:
+                return {"error": f"The role {name} already exists"}
+            s.setdefault("custom_roles", []).append(name)
+        else:
+            return {"error": "Choose pool or role"}
+        self.store.settings_put(s)
+        self._fields = (0.0, None)
+        self._changed()
+        return {"ok": True, **self.options()}
+
+    def remove_option(self, kind, name):
+        s = self.store.settings_get()
+        field = "pool" if kind == "pool" else "role_category"
+        used = sum(1 for v in self.all_views() if v.get(field) == name)
+        if used:
+            return {"error": f"{used} candidate(s) still use {name}. Move or delete them first."}
+        if kind == "pool":
+            s["custom_pools"] = [p for p in s.get("custom_pools", []) if p["name"] != name]
+        else:
+            s["custom_roles"] = [r for r in s.get("custom_roles", []) if r != name]
+        self.store.settings_put(s)
+        self._changed()
+        return {"ok": True, **self.options()}
+
     # ---------- one candidate as the screen sees it ----------
     def view(self, cid, d, fields, bookmarks=frozenset()):
         man = d.get("manual") or {}
@@ -150,7 +200,7 @@ class Candidates:
         v.update(man)
         v["custom"] = d.get("custom") or {}
         v["id"] = cid
-        v["pool"] = d.get("pool") or POOLS[d["_pool"]]
+        v["pool"] = d.get("pool") or POOLS.get(d["_pool"], "Other")
         v["country"] = v.get("country") or "India"     # everything before global search was India-only
         readiness = str(d.get("readiness") or "Discovered")
         v["data_status"] = "Rejected" if readiness == "Rejected" else "Refreshed" if d.get("last_checked") else \
@@ -211,12 +261,21 @@ class Candidates:
         days = int(p.get("updated_within") or 0)
         since = (dt.datetime.now(IST) - dt.timedelta(days=days)).date().isoformat() if days else ""
         yes = lambda k: str(p.get(k) or "").lower() in ("1", "true", "yes")
+        # countries: the biggest few get their own option, the rest are grouped as "Other"
+        ccount = {}
+        for v in in_pool:
+            ccount[v["country"]] = ccount.get(v["country"], 0) + 1
+        main = [c for c, _ in sorted(ccount.items(), key=lambda x: -x[1])][:MAIN_COUNTRIES]
+        ctry = p.get("country") or ""
+        in_country = (lambda v: v.get("country") not in main) if ctry == OTHER else (lambda v: not ctry or v.get("country") == ctry)
 
         def ok(v):
             if q and q not in " ".join(str(v.get(k) or "") for k in ("name", "current_title", "current_company", "city", "skills",
                                                                        "modules_specialization", "certifications", "standard_title")).lower():
                 return False
-            for key, field in (("city", "city"), ("country", "country"), ("role", "role_category"), ("bucket", "experience_bucket"),
+            if not in_country(v):
+                return False
+            for key, field in (("city", "city"), ("role", "role_category"), ("bucket", "experience_bucket"),
                                ("data_status", "data_status")):
                 if p.get(key) and str(v.get(field) or "") != p[key]:
                     return False
@@ -253,12 +312,11 @@ class Candidates:
         size = min(max(int(p.get("size") or 24), 1), 200)
         page = max(int(p.get("page") or 1), 1)
         cnt = lambda key: sorted({str(v.get(key)) for v in in_pool if v.get(key)})
-        cities, countries = {}, {}
-        ctry = p.get("country") or ""
+        cities = {}
         for v in in_pool:
-            if v.get("city") and (not ctry or v.get("country") == ctry):
+            if v.get("city") and in_country(v):
                 cities[v["city"]] = cities.get(v["city"], 0) + 1
-            countries[v["country"]] = countries.get(v["country"], 0) + 1
+        others = sum(n for c, n in ccount.items() if c not in main)
         stats = {
             "total": len(rows), "pool_total": len(in_pool),
             "in_role": sum(1 for v in rows if v.get("title_match") == "Exact"),
@@ -270,8 +328,9 @@ class Candidates:
             "contactable": sum(1 for v in rows if scoring.has_value("email", v.get("email")) or scoring.has_value("phone", v.get("phone"))),
             "avg_percent": round(sum(v["percent"] for v in rows) / len(rows)) if rows else 0,
         }
-        facets = {"cities": [c for c, _ in sorted(cities.items(), key=lambda x: -x[1])][:60],
-                  "countries": [c for c, _ in sorted(countries.items(), key=lambda x: -x[1])], "pools": [x for x in POOLS.values()], "roles": cnt("role_category"),
+        facets = {"cities": [c for c, _ in sorted(cities.items(), key=lambda x: -x[1])][:80],
+                  "countries": main, "other_countries": others,
+                  "country_counts": {c: ccount[c] for c in main}, "pools": self.pool_names(), "roles": sorted(set(cnt("role_category")) | set(self.options()["roles"])),
                   "buckets": [b for b in ("0-2", "2-5", "5-8", "8+", "Unknown") if any(v.get("experience_bucket") == b for v in in_pool)],
                   "data_status": DATA_STATUS}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,
@@ -353,6 +412,7 @@ class Candidates:
         seen = set()
         plan = []
         for i, row in enumerate(rows, start=2):           # row 1 = headers
+            transfer.EXTRA_POOLS[:] = [x["name"] for x in self.options()["pools"]]
             data, error = transfer.clean_row(row, mapping, default_pool)
             if not error and data["linkedin_url"] in seen:
                 error = "Same LinkedIn URL appears again in this file"
@@ -361,14 +421,14 @@ class Candidates:
                 continue
             seen.add(data["linkedin_url"])
             cid = by_url.get(data["linkedin_url"])
-            if not cid and data["pool"] not in POOL_KEY:
-                res["errors"].append({"row": i, "name": data.get("name") or "", "error": "Pool missing: add a Pool column (ServiceNow / AI/ML / Salesforce / Workday) or choose a default pool"})
+            if not cid and not self.pool_key(data["pool"]):
+                res["errors"].append({"row": i, "name": data.get("name") or "", "error": "Pool missing: add a Pool column (" + " / ".join(self.pool_names()) + ") or choose a default pool"})
                 continue
-            if not cid and not self.store.has_pool(POOL_KEY[data["pool"]]):
+            if not cid and not self.store.has_pool(self.pool_key(data["pool"])):
                 res["errors"].append({"row": i, "name": data.get("name") or "", "error": f"{data['pool']} database is not connected yet"})
                 continue
             if cid:
-                data["pool"] = docs[cid].get("pool") or POOLS[docs[cid]["_pool"]]
+                data["pool"] = docs[cid].get("pool") or POOLS.get(docs[cid]["_pool"], "Other")
             if not cid:
                 res["new"] += 1
                 plan.append(("new", None, data))
@@ -405,7 +465,7 @@ class Candidates:
                 r = self.create(data["pool"], data, user)
                 added += 1 if r.get("ok") else 0
                 continue
-            pool_key = next(k for k, v in POOLS.items() if v == data["pool"])
+            pool_key = self.pool_key(data["pool"])
             manual = {k: v for k, v in data.items() if k in allowed or k == "name"}
             doc = {"pool": data["pool"], "name": data["name"], "linkedin_url": data["linkedin_url"], "readiness": "Discovered",
                    "source": "Imported file", "source_flow": "import (website)", "first_seen": day, "last_updated": day,
@@ -520,9 +580,9 @@ class Candidates:
 
     def create(self, pool_label, data, user):
         """Add one candidate by hand. data = field values from the Add candidate form."""
-        key = next((k for k, v in POOLS.items() if v == pool_label), None)
+        key = self.pool_key(pool_label)
         if not key:
-            return {"error": "bad_value", "message": "Choose a pool (ServiceNow, AI/ML, Salesforce or Workday)"}
+            return {"error": "bad_value", "message": "Choose a pool"}
         if not self.store.has_pool(key):
             return {"error": "bad_value", "message": f"{pool_label} database is not connected yet. Add its MongoDB link in Render first."}
         url = transfer.clean_url(data.get("linkedin_url"))
@@ -586,7 +646,8 @@ class Candidates:
         views = self.all_views(user_id)
         t = today_ist()
         days = [(dt.datetime.now(IST).date() - dt.timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
-        series = {d: {"date": d, **{p: 0 for p in POOLS.values()}} for d in days}
+        names = self.pool_names()
+        series = {d: {"date": d, **{p: 0 for p in names}} for d in days}
         for v in views:
             f = str(v.get("first_seen") or "")[:10]
             if f in series:
@@ -599,7 +660,7 @@ class Candidates:
         with_phone = sorted([x for x in lights if x["phone"]], key=lambda x: x["found_at"], reverse=True)
         return {
             "total": len(views),
-            "pools": {p: sum(1 for v in views if v["pool"] == p) for p in POOLS.values()},
+            "pools": {p: sum(1 for v in views if v["pool"] == p) for p in names},
             "added_today": sum(1 for v in views if str(v.get("first_seen") or "")[:10] == t),
             "enriched": sum(1 for v in views if v["data_status"] in ("Enriched", "Refreshed")),
             "enriched_today": sum(1 for v in views if self._enriched_on(v, t)),

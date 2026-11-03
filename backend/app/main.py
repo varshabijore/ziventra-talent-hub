@@ -223,6 +223,28 @@ async def candidates(request):
     return ok(await run_in_threadpool(lambda: c.memo("search", p, lambda: c.search(p, u["id"]))))
 
 
+async def options(request):
+    """GET: pools and roles added on the website. POST {action: add|remove, kind: pool|role, name, desc?}."""
+    c = S["cand"]
+    if request.method == "GET":
+        current_user(request)
+        return ok(await run_in_threadpool(c.options))
+    u = current_user(request, "recruiter")
+    try:
+        data = await request.json() or {}
+    except Exception:
+        raise HTTPException(400, "Send JSON")
+    kind, name = str(data.get("kind") or ""), str(data.get("name") or "")
+    if data.get("action") == "remove":
+        r = await run_in_threadpool(c.remove_option, kind, name)
+    else:
+        r = await run_in_threadpool(c.add_option, kind, name, str(data.get("desc") or ""))
+    if r.get("error"):
+        return err(400, r["error"])
+    log(request, u, f"option_{data.get('action') or 'add'}", f"{kind}: {name}")
+    return ok(r)
+
+
 async def smart_search(request):
     u = current_user(request)
     text = str(request.query_params.get("q") or "")[:200]
@@ -412,6 +434,7 @@ routes = [
     Route("/api/automation", automation_page),
     Route("/api/contacts", contacts_page),
     Route("/api/search", smart_search),
+    Route("/api/options", options, methods=["GET", "POST"]),
     Route("/api/candidates", candidates, methods=["GET", "POST"]),
     Route("/api/candidates/delete", delete_candidates, methods=["POST"]),
     Route("/api/candidates/export", export, methods=["GET", "POST"]),

@@ -1,4 +1,4 @@
-import { POOLS } from "../pools.js";
+import { POOLS, poolColor } from "../pools.js";
 import SmartSearch from "../components/SmartSearch.jsx";
 import { Avatar, BarChart, Donut, ErrorBox, HBars, Kpi, Loading, fmt, tone, when } from "../components/ui.jsx";
 import { useCached } from "../context/DataContext.jsx";
@@ -11,7 +11,8 @@ export default function Dashboard({ user }) {
   if (loading && !d) return <Loading />;
   if (error) return <ErrorBox error={error} retry={reload} />;
   const ct = d.contacts || { phones: 0, emails: 0, both: 0, list: [] };
-  const shown = POOLS.filter((p) => (d.pools?.[p.name] || 0) > 0 || ["ServiceNow", "AI/ML"].includes(p.name));
+  const extra = Object.keys(d.pools || {}).filter((n) => !POOLS.some((p) => p.name === n) && d.pools[n] > 0).map((n, i) => ({ name: n, color: poolColor(n, i) }));
+  const shown = [...POOLS.filter((p) => (d.pools?.[p.name] || 0) > 0 || ["ServiceNow", "AI/ML"].includes(p.name)), ...extra];
   return (
     <div className="dash">
       <div className="top"><div><h1>{greet()}, {user.name.split(" ")[0]}</h1>

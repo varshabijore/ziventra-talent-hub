@@ -4,6 +4,8 @@ from . import config
 
 POOLS = {"sn": "ServiceNow", "ai": "AI/ML", "sf": "Salesforce", "wd": "Workday"}
 POOL_KEY = {v: k for k, v in POOLS.items()}
+CUSTOM_KEY = "cx"   # pools people add on the website (e.g. "Python Developer"): one collection, the pool name is on each document
+STORAGE = [*POOLS, CUSTOM_KEY]
 
 
 def now():
@@ -19,6 +21,7 @@ class MongoStore:
         sn = MongoClient(config.SN_MONGODB_URI, serverSelectionTimeoutMS=10000)
         ai = MongoClient(config.AI_MONGODB_URI, serverSelectionTimeoutMS=10000) if config.AI_MONGODB_URI else sn
         self.cand = {"sn": sn[config.SN_DB][config.CANDIDATE_COLLECTION], "ai": ai[config.AI_DB][config.CANDIDATE_COLLECTION]}
+        self.cand[CUSTOM_KEY] = sn[config.APP_DB]["candidates_custom"]
         clients = {}
         for key, uri, name in (("sf", config.SF_MONGODB_URI, config.SF_DB), ("wd", config.WD_MONGODB_URI, config.WD_DB)):
             if uri:   # new pools are optional until their cluster exists
@@ -113,7 +116,7 @@ class MemoryStore:
     def __init__(self, seed=None):
         self._users, self._activity, self._audit, self._bm, self._runs = {}, [], [], set(), []
         self._settings = {}
-        self._cand = {k: {} for k in POOLS}
+        self._cand = {k: {} for k in STORAGE}
         if seed:
             seed(self)
 
