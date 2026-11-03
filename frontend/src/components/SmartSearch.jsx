@@ -1,6 +1,7 @@
 // Dashboard smart search: type a name, a page, or a plain-English question
 // ("salesforce developers in pune with email") and jump straight to the result.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, qs } from "../api.js";
 import { go } from "../router.js";
 import { Avatar, Icon, PoolChip, fmt } from "./ui.jsx";
@@ -21,15 +22,25 @@ export default function SmartSearch() {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [phone, setPhone] = useState(() => window.matchMedia("(max-width:760px)").matches);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width:760px)"); const f = () => setPhone(m.matches);
+    m.addEventListener("change", f); return () => m.removeEventListener("change", f);
+  }, []);
+  const [slot, setSlot] = useState(null);   // looked up after mount, once the header exists
+  useEffect(() => { setSlot(phone ? document.querySelector(".mhead .msslot") : null); }, [phone]);   // closed = just the round 🔍 button next to the profile circle
+  const openBar = () => { setExpanded(true); setOpen(true); setTimeout(() => input.current?.focus(), 30); };
+  const closeBar = () => { setOpen(false); if (!text.trim()) setExpanded(false); };
   const box = useRef(null), input = useRef(null);
 
   // Ctrl+K or "/" focuses the box from anywhere on the page
   useEffect(() => {
     const key = (e) => {
       const typing = /input|textarea|select/i.test(document.activeElement?.tagName || "");
-      if ((e.key === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing)) { e.preventDefault(); input.current?.focus(); setOpen(true); }
+      if ((e.key === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing)) { e.preventDefault(); setExpanded(true); setOpen(true); setTimeout(() => input.current?.focus(), 30); }
     };
-    const out = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const out = (e) => { if (box.current && !box.current.contains(e.target)) { setOpen(false); if (!input.current?.value.trim()) setExpanded(false); } };
     document.addEventListener("keydown", key); document.addEventListener("mousedown", out);
     return () => { document.removeEventListener("keydown", key); document.removeEventListener("mousedown", out); };
   }, []);
@@ -58,24 +69,26 @@ export default function SmartSearch() {
   }, [res, t, pages.length]);    // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setSel(0), [items.length, text]);
 
-  const pick = (it) => { if (!it) return; setOpen(false); setText(""); go(it.to); };
+  const pick = (it) => { if (!it) return; setOpen(false); setText(""); setExpanded(false); go(it.to); };
   const onKey = (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, items.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
     else if (e.key === "Enter") { e.preventDefault(); pick(items[sel]); }
-    else if (e.key === "Escape") { setOpen(false); input.current?.blur(); }
+    else if (e.key === "Escape") { if (text) setText(""); else { closeBar(); input.current?.blur(); } }
   };
 
-  return (
-    <div className="ssearch" ref={box}>
-      <div className={"ssbox" + (open ? " on" : "")}>
+  const ui = (
+    <div className={"ssearch" + (expanded ? " open" : "")} ref={box}>
+      {!expanded && <button type="button" className="ssbtn" onClick={openBar} title="Search (Ctrl K)" aria-label="Open search"><Icon name="search" size={18} /></button>}
+      <div className={"ssbox" + (open ? " on" : "")} hidden={!expanded}>
         <Icon name="search" size={18} />
         <input ref={input} value={text} onChange={(e) => { setText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onKeyDown={onKey}
           placeholder="Search anything: a name, a company, a page, or “salesforce developers in pune with email”"
           aria-label="Smart search" role="combobox" aria-expanded={open} aria-controls="ss-list" autoComplete="off" />
-        {busy ? <span className="spin" aria-hidden="true" /> : <kbd>Ctrl K</kbd>}
+        {busy ? <span className="spin" aria-hidden="true" /> : <kbd>Esc</kbd>}
+        <button type="button" className="ssclose" onClick={() => { setText(""); setOpen(false); setExpanded(false); }} aria-label="Close search">✕</button>
       </div>
-      {open && (
+      {open && expanded && (
         <div className="ssdrop" id="ss-list" role="listbox">
           {!t && (
             <div className="sshelp">
@@ -110,4 +123,6 @@ export default function SmartSearch() {
       )}
     </div>
   );
+  // phones: the avatar lives in the top header, so the round search button goes there too (just left of it)
+  return slot ? createPortal(ui, slot) : ui;
 }

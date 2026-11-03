@@ -143,6 +143,7 @@ function Shell({ route, children }) {
       <header className="mhead" ref={mref}>
         <a className="logo" href="/dashboard"><i>{APP_SHORT}</i><span>{APP_NAME}</span></a>
         <div className="mright">
+          <span className="msslot" />
           <UserMenu {...menu} />
           <button type="button" className="iconbtn" onClick={() => setMobileOpen(!mobileOpen)} aria-expanded={mobileOpen} aria-label="Menu"><Icon name={mobileOpen ? "x" : "menu"} /></button>
         </div>
