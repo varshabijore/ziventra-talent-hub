@@ -22,7 +22,7 @@ SCHEDULE = {
     "Treg": ["19:11"],
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
-PAUSED = {"Apollo": "Paused until sir upgrades the Apollo plan. The free credits are used up (they refresh on 27 Nov). Do not run it in n8n."}
+PAUSED = {"Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
 JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
 WHAT = {
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
