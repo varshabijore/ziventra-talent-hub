@@ -4,7 +4,7 @@ import { APP_NAME, APP_SHORT, LOGIN_PATH } from "./brand.js";
 import { useRoute } from "./router.js";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import { DataProvider } from "./context/DataContext.jsx";
-import { Icon, Modal, ToastProvider, initials, useToast, when } from "./components/ui.jsx";
+import { BusyBar, Icon, Modal, ToastProvider, initials, useToast, when } from "./components/ui.jsx";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Candidates from "./pages/Candidates.jsx";
@@ -185,7 +185,7 @@ function Routes() {
 }
 
 export default function App() {
-  return <ToastProvider><DataProvider><AuthProvider><Routes /></AuthProvider></DataProvider></ToastProvider>;
+  return <ToastProvider><BusyBar /><DataProvider><AuthProvider><Routes /></AuthProvider></DataProvider></ToastProvider>;
 }
 
 export { LOGIN_PATH };

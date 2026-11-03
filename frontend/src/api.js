@@ -15,14 +15,28 @@ export class ApiError extends Error {
 let onExpired = () => {};
 export const setOnExpired = (fn) => { onExpired = fn; };
 
-export async function api(path, { method = "GET", body, raw = false } = {}) {
+// how many requests are running right now (the top loading bar and "still loading" note listen to this)
+const pending = new Map();
+let seq = 0;
+const subs = new Set();
+const notify = () => subs.forEach((fn) => fn([...pending.values()]));
+export const onBusy = (fn) => { subs.add(fn); return () => subs.delete(fn); };
+
+export async function api(path, opts = {}) {
+  const id = ++seq;
+  pending.set(id, Date.now());
+  notify();
+  try { return await call(path, opts); } finally { pending.delete(id); notify(); }
+}
+
+async function call(path, { method = "GET", body, raw = false, keepalive = false } = {}) {
   const s = session.get();
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (s?.token) headers.Authorization = "Bearer " + s.token;
   let res;
   try {
-    res = await fetch(API_URL + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    res = await fetch(API_URL + path, { method, headers, keepalive, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
     throw new ApiError(0, "Can't reach the server. If it was idle, it may be waking up: wait 30-60 seconds and try again.");
   }

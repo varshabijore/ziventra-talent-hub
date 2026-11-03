@@ -1,6 +1,7 @@
 // Shared building blocks: icons, chips, avatar, KPI card, completeness badge with popover, toast, modal, charts.
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { poolCls } from "../pools.js";
+import { onBusy } from "../api.js";
 
 export const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 export const initials = (n) => String(n || "?").trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
@@ -213,7 +214,30 @@ export function Donut({ parts, label }) {
   );
 }
 
-export const Loading = () => <div className="loading">Loading…</div>;
+export const Loading = ({ text = "Loading…" }) => <div className="loading" role="status"><span className="spin" aria-hidden="true" />{text}</div>;
+
+// thin bar at the top while the website waits for the server; after 5 s it also says why
+export function BusyBar() {
+  const [state, setState] = useState({ on: false, slow: false });
+  useEffect(() => {
+    let show, list = [];
+    const tick = () => {
+      const now = Date.now();
+      const oldest = list.length ? Math.min(...list) : 0;
+      const on = list.length > 0 && now - oldest > 250, slowNow = list.length > 0 && now - oldest > 5000;
+      setState((p) => (p.on === on && p.slow === slowNow ? p : { on, slow: slowNow }));
+    };
+    const off = onBusy((l) => { list = l; tick(); });
+    show = setInterval(tick, 250);
+    return () => { off(); clearInterval(show); };
+  }, []);
+  return (
+    <>
+      {state.on && <div className="busybar" role="progressbar" aria-label="Loading"><span /></div>}
+      {state.slow && <div className="busynote" role="status"><span className="spin" aria-hidden="true" />Still loading… the server may be waking up, this can take up to a minute.</div>}
+    </>
+  );
+}
 export const ErrorBox = ({ error, retry }) => (
   <div className="panel empty"><b>Couldn't load this page.</b><br />{error}<br /><br />{retry && <button className="btn" onClick={retry}>Try again</button>}</div>
 );

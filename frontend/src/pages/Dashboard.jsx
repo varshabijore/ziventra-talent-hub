@@ -31,11 +31,11 @@ export default function Dashboard({ user }) {
       <div className="grid4 drow">
         <div className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><h2>Phone numbers found</h2><a className="small" href="/candidates?has_phone=1">View all</a></div>
-          <p className="sub"><b>{fmt(ct.phones)}</b> with phone · {fmt(ct.both)} with phone + email · {fmt(ct.emails)} with email</p>
-          <div className="fill">{ct.list.map((c) => (
+          <p className="sub">{fmt(ct.phones)} candidates with a phone number</p>
+          <div className="fill">{ct.list.slice(0, 5).map((c) => (
             <a key={c.id} className="row" href={"/candidate/" + encodeURIComponent(c.id)}><Avatar c={c} />
-              <div className="grow"><div className="t">{c.name}</div><div className="s">{c.pool} · {c.phone_source}</div></div>
-              <span className="mono small phonev">{c.phone}</span></a>
+              <div className="grow"><div className="t">{c.name}</div><div className="s mono phonev">{c.phone}</div></div>
+              <span className="chip tiny">{c.phone_source}</span></a>
           ))}
           </div>{!ct.list.length && <div className="empty">No phone numbers yet</div>}
         </div>

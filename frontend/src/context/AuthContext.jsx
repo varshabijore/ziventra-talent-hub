@@ -1,6 +1,6 @@
 // Signed-in admin, shared with every page through React Context.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, session, setOnExpired } from "../api.js";
+import { api, session, setOnExpired, API_URL } from "../api.js";
 import { go } from "../router.js";
 import { LOGIN_PATH } from "../brand.js";
 import { useData } from "./DataContext.jsx";
@@ -25,7 +25,12 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     user,
     login: (u, token) => { session.set({ user: u, token }); setUser(u); warmUp(); go("/dashboard", true); },
-    logout: async () => { try { await api("/auth/logout", { method: "POST" }); } catch { /* ignore */ } session.clear(); data.clear(); setUser(null); go(LOGIN_PATH, true); },
+    // sign out at once on this device; the server is told in the background (it may be slow to wake up)
+    logout: () => {
+      const s = session.get();
+      if (s?.token) fetch(API_URL + "/auth/logout", { method: "POST", keepalive: true, headers: { Authorization: "Bearer " + s.token } }).catch(() => {});
+      session.clear(); data.clear(); setUser(null); go(LOGIN_PATH, true);
+    },
     updateUser: (u) => { setUser(u); session.set({ ...session.get(), user: u }); },
   }), [user, data, warmUp]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

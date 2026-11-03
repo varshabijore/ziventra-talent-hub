@@ -6,19 +6,19 @@ PERSONAL = re.compile(r"@(gmail|yahoo|outlook|hotmail|rediffmail|icloud|live|pro
 
 # key = field in the candidate document; must = needed before "Shortlisted"
 DEFAULT_FIELDS = [
-    {"key": "phone", "label": "Phone", "group": "Contact", "points": 15, "must": True, "why": "Candidate ko call nahi kar sakte"},
-    {"key": "email", "label": "Email", "group": "Contact", "points": 14, "must": True, "why": "Email outreach nahi ho sakta", "type": "email"},
-    {"key": "domain_experience_years", "label": "Domain experience (yrs)", "group": "Experience", "points": 10, "must": True, "why": "Role ke liye fit check nahi ho sakta", "type": "number"},
-    {"key": "total_experience_years", "label": "Total experience (yrs)", "group": "Experience", "points": 8, "must": False, "why": "Seniority tay nahi ho sakti", "type": "number"},
-    {"key": "current_title", "label": "Current title", "group": "Experience", "points": 7, "must": True, "why": "Abhi kya kaam karte hain, pata nahi"},
-    {"key": "current_company", "label": "Current company", "group": "Experience", "points": 4, "must": False, "why": "Employer pata nahi"},
-    {"key": "linkedin_url", "label": "LinkedIn URL", "group": "Contact", "points": 10, "must": True, "why": "Profile verify nahi ho sakti", "type": "url"},
-    {"key": "name", "label": "Full name", "group": "Contact", "points": 5, "must": True, "why": "Pehchaan adhoori"},
-    {"key": "city", "label": "City", "group": "Contact", "points": 6, "must": True, "why": "Location match nahi ho sakti"},
-    {"key": "skills", "label": "Skills", "group": "Skills", "points": 6, "must": False, "why": "Skill match nahi ho sakta"},
-    {"key": "modules_specialization", "label": "Modules / specialization", "group": "Skills", "points": 6, "must": False, "why": "Module expertise pata nahi"},
-    {"key": "certifications", "label": "Certifications", "group": "Skills", "points": 6, "must": False, "why": "Certified hai ya nahi, pata nahi"},
-    {"key": "open_to_work", "label": "Open to work", "group": "Contact", "points": 3, "must": False, "why": "Job change interest pata nahi", "options": ["Yes", "No", "Unknown"]},
+    {"key": "phone", "label": "Phone", "group": "Contact", "points": 15, "must": True, "why": "No number to call the candidate"},
+    {"key": "email", "label": "Email", "group": "Contact", "points": 14, "must": True, "why": "No email for outreach", "type": "email"},
+    {"key": "domain_experience_years", "label": "Domain experience (yrs)", "group": "Experience", "points": 10, "must": True, "why": "Cannot check fit for the role", "type": "number"},
+    {"key": "total_experience_years", "label": "Total experience (yrs)", "group": "Experience", "points": 8, "must": False, "why": "Seniority cannot be judged", "type": "number"},
+    {"key": "current_title", "label": "Current title", "group": "Experience", "points": 7, "must": True, "why": "Current role is unknown"},
+    {"key": "current_company", "label": "Current company", "group": "Experience", "points": 4, "must": False, "why": "Employer is unknown"},
+    {"key": "linkedin_url", "label": "LinkedIn URL", "group": "Contact", "points": 10, "must": True, "why": "Profile cannot be verified", "type": "url"},
+    {"key": "name", "label": "Full name", "group": "Contact", "points": 5, "must": True, "why": "Identity is incomplete"},
+    {"key": "city", "label": "City", "group": "Contact", "points": 6, "must": True, "why": "Location cannot be matched"},
+    {"key": "skills", "label": "Skills", "group": "Skills", "points": 6, "must": False, "why": "Skills cannot be matched"},
+    {"key": "modules_specialization", "label": "Modules / specialization", "group": "Skills", "points": 6, "must": False, "why": "Module expertise is unknown"},
+    {"key": "certifications", "label": "Certifications", "group": "Skills", "points": 6, "must": False, "why": "Certification status is unknown"},
+    {"key": "open_to_work", "label": "Open to work", "group": "Contact", "points": 3, "must": False, "why": "Interest in a job change is unknown", "options": ["Yes", "No", "Unknown"]},
 ]
 
 # extra editable fields that carry no points
@@ -76,7 +76,7 @@ def score(view: dict, fields: list[dict]) -> dict:
             half = f["points"] // 2
             got += half
             missing.append({"key": "email", "label": "Personal email", "lost": f["points"] - half, "must": False,
-                            "why": "Sirf company email hai; personal email se aur points milenge"})
+                            "why": "Only a work email; a personal email adds more points"})
             continue
         got += f["points"]
     missing.sort(key=lambda m: -m["lost"])

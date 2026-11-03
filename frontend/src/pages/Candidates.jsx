@@ -82,7 +82,7 @@ export default function Candidates({ query }) {
   useEffect(() => { const t = setTimeout(() => setF((f) => (f.q === q ? f : { ...f, q, page: 1 })), 250); return () => clearTimeout(t); }, [q]);
 
 
-  const { data: r, error, reload } = useCached("/candidates" + qs({ ...F, size: view === "table" ? 25 : small ? 6 : 12 }), { keep: true });
+  const { data: r, error, reload } = useCached("/candidates" + qs({ ...F, size: view === "table" ? 10 : small ? 6 : 12 }), { keep: true });
   const set = (k, v) => setF((f) => ({ ...f, [k]: v, ...(k === "country" ? { city: "" } : {}), page: 1 }));
   const reset = () => { setQ(""); setF({ ...DEFAULT }); setPicked(new Set()); if (query.get("first_seen")) go("/candidates"); };
   const [picked, setPicked] = useState(() => new Set());
