@@ -363,7 +363,8 @@ async def contacts_page(request):
 
 # ---------- settings ----------
 async def health(request):
-    return ok({"ok": True, "mode": config.DATA_MODE})
+    cand = S.get("cand")
+    return ok({"ok": True, "mode": config.DATA_MODE, **(cand.status if cand else {})})
 
 
 # ---------- app ----------

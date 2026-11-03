@@ -60,12 +60,19 @@ class Candidates:
         self._memo = {}          # (name, ver, params) -> result
         self._fields = (0.0, None)
         self._gone = {}          # linkedin url -> id of a deleted candidate
+        self.status = {}         # per-pool load result, shown on /api/health
 
     # ---------- loading ----------
     def _load(self):
-        docs, gone = {}, {}
+        docs, gone, errors, counts = {}, {}, {}, {}
         for key in POOLS:
-            for d in self.store.candidates(key):
+            try:
+                rows = self.store.candidates(key)
+            except Exception as e:      # one pool's database down must not hide the other pools
+                errors[key] = type(e).__name__
+                rows = []
+            counts[key] = len(rows)
+            for d in rows:
                 d["_pool"] = key
                 if d.get("deleted"):          # deleted on the website: hidden everywhere, kept so it can come back
                     u = transfer.clean_url((d.get("manual") or {}).get("linkedin_url") or d.get("linkedin_url"))
@@ -77,6 +84,8 @@ class Candidates:
                         d[k] = fix_date(d[k])
                 docs[f"{key}:{d['_id']}"] = d
         self._gone = gone
+        self.status = {"pools": {POOLS[k]: {"connected": self.store.has_pool(k), "loaded": counts.get(k, 0), "error": errors.get(k, "")} for k in POOLS},
+                       "loaded_at": dt.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")}
         return docs
 
     def _refresh_bg(self):
