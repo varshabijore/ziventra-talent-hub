@@ -19,7 +19,7 @@ SCHEDULE = {
     "Refresh": ["15:41", "20:41"],
     "Sync": ["10:45", "13:45", "16:45", "19:45"],
     "Apollo": [],  # manual: started by hand in n8n (few credits)
-    "Treg": [],  # manual: started by hand in n8n in batches (backlog too big for a fixed daily run)
+    "Treg": ["12:11", "15:11", "18:11"],  # up to 200 per run: clears the backlog, then only new enriched candidates
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
 PAUSED = {"Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
@@ -30,7 +30,7 @@ WHAT = {
     "Refresh": "Re-checks enriched profiles older than 30 days for LinkedIn changes",
     "Sync": "Copies the master sheet into MongoDB (what this website reads)",
     "Apollo": "Finds the personal mobile number from Apollo (run by hand, limited credits)",
-    "Treg": "Finds work and personal email through Treg for enriched candidates (run by hand in batches)",
+    "Treg": "Finds work and personal email through Treg for enriched candidates (up to 200 per run)",
 }
 
 
