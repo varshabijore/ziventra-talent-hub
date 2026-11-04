@@ -5,20 +5,31 @@ import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import Contacts from "./Contacts.jsx";
 // compact pool split for the KPI card: one thin bar + one line of coloured numbers (hover shows the pool name)
+const POOL_C = { ServiceNow: "var(--sn)", "AI/ML": "var(--ai)", Salesforce: "var(--sf)", Workday: "var(--wd)" };
+const EXTRA_C = ["#0ea5e9", "#f59e0b", "#ec4899", "#14b8a6", "#8b5cf6", "#64748b"];
+// [pool name, count, colour] for every pool that found someone (zeros hidden); pools added on the website by name
+const poolParts = (x) => {
+  const bp = x.by_pool && Object.keys(x.by_pool).length ? x.by_pool
+    : { ServiceNow: x.new_sn, "AI/ML": x.new_ai, Salesforce: x.new_sf, Workday: x.new_wd, "Added pools": x.new_cx };
+  let k = 0;
+  return Object.entries(bp).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([p, n]) => [p, n, POOL_C[p] || EXTRA_C[k++ % EXTRA_C.length]]);
+};
+// short label for the small KPI card: "Power Apps Developer" -> "Power Apps", ServiceNow -> "SN"
+const SHORT = { ServiceNow: "SN", "AI/ML": "AI/ML", Salesforce: "SF", Workday: "WD" };
+const shortPool = (p) => SHORT[p] || p.replace(/\s+(developer|architect|engineer|consultant|specialist|analyst|administrator)s?$/i, "").slice(0, 14);
 function PoolSplit({ x }) {
-  const parts = [["ServiceNow", x.new_sn, "var(--sn)"], ["AI/ML", x.new_ai, "var(--ai)"], ["Salesforce", x.new_sf, "var(--sf)"], ["Workday", x.new_wd, "var(--wd)"], ["Added pools", x.new_cx, "var(--muted)"]]
-    .filter(([, n]) => n > 0);
+  const parts = poolParts(x);
   const total = parts.reduce((a, [, n]) => a + n, 0);
   if (!total) return <>no new candidates</>;
   const label = parts.map(([p, n]) => `${n} ${p}`).join(", ");
   return (
     <span className="psplit" title={label} aria-label={label}>
       <span className="pbar">{parts.map(([p, n, c]) => <i key={p} style={{ width: (100 * n) / total + "%", background: c }} />)}</span>
-      <span className="pnums">{parts.map(([p, n, c]) => <span key={p}><b style={{ background: c }} />{fmt(n)}</span>)}</span>
+      <span className="pnums">{parts.map(([p, n, c]) => <span key={p} title={p}><b style={{ background: c }} />{shortPool(p)} {fmt(n)}</span>)}</span>
     </span>
   );
 }
-const split = (x, sep = ", ") => [[x.new_sn, "ServiceNow"], [x.new_ai, "AI/ML"], [x.new_sf, "Salesforce"], [x.new_wd, "Workday"], [x.new_cx, "added pools"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${n || 0} ${l}`).join(sep);
+const split = (x, sep = ", ") => poolParts(x).map(([p, n]) => `${fmt(n)} ${p}`).join(sep) || "none";
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -155,7 +166,7 @@ export default function Automation({ query }) {
                     <td className="mono">{r.found || "-"}</td>
                     <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.job === "Apollo" ? r.matched : r.synced || "-"}</b>
                       {r.job === "Apollo" ? <div className="small muted">{r.emails_added} emails</div> : null}
-                      {r.job === "Scraping" && (r.new_sn || r.new_ai) ? <div className="small muted">{r.new_sn} SN · {r.new_ai} AI</div> : null}
+                      {r.job === "Scraping" && r.new ? <div className="small muted">{poolParts(r).map(([p, n]) => `${n} ${p.length > 14 ? p.split(" ").map((w) => w[0]).join("") : p}`).join(" · ")}</div> : null}
                       {r.job === "Enrichment" && (r.emails_valid || r.emails_risky) ? <div className="small muted">{r.emails_valid} valid email</div> : null}</td>
                     <td className="mono">{r.rejected || 0}{r.duplicates ? <div className="small muted">{r.duplicates} dup</div> : null}</td>
                     <td className="mono small">{r.job === "Apollo" ? `~${r.credits} cr` : money(r.cost)}</td>

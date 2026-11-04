@@ -85,9 +85,15 @@ def parse(doc):
     m3 = re.search(r"(\d+)\s*Salesforce\s*\+\s*(\d+)\s*Workday", notes)
     r["new_sf"], r["new_wd"] = (int(m3.group(1)), int(m3.group(2))) if m3 else (0, 0)
     # pools added on the website come after Workday: "+ 40 MS Fabric Architect + 12 Data Engineer."
-    head = notes.split(". ")[0] if " + " in notes else ""
-    r["new_cx"] = sum(int(n) for n, lbl in re.findall(r"(\d+)\s+([^+]+?)\s*(?=\+|$)", head)
-                      if lbl.strip() not in ("ServiceNow", "AI/ML", "Salesforce", "Workday"))
+    # scraping notes start with the pool split: "0 ServiceNow + 0 AI/ML + 376 Power Apps Developer. Countries: ..."
+    head = notes.split(". ")[0] if job == "Scraping" and re.match(r"\s*\d+\s+[A-Za-z]", notes) else ""
+    # every pool by name, e.g. {"ServiceNow": 7, "Power Apps Developer": 376}
+    r["by_pool"] = {}
+    for n, lbl in re.findall(r"(\d+)\s+([^+]+?)\s*(?=\+|$)", head):
+        lbl = lbl.strip()
+        if lbl and len(lbl) <= 60:
+            r["by_pool"][lbl] = r["by_pool"].get(lbl, 0) + int(n)
+    r["new_cx"] = sum(n for lbl, n in r["by_pool"].items() if lbl not in ("ServiceNow", "AI/ML", "Salesforce", "Workday"))
     rg = re.search(r"Region:\s*(\w+)", notes)
     r["region"] = rg.group(1) if rg else ""
     reasons = {k: int(v) for k, v in re.findall(r"(not_india|wrong_title|recruiter|no_name|duplicate)\s+(\d+)", notes)}
@@ -169,7 +175,7 @@ def parse(doc):
         iss.append("Refresh ran but checked 0 profiles")
     r["status"] = "error" if r["error"] else "warning" if iss else "ok"
     # fields the Daily record page uses
-    split = " + ".join(f"{n} {lbl}" for n, lbl in ((r["new_sn"], "ServiceNow"), (r["new_ai"], "AI/ML"), (r["new_sf"], "Salesforce"), (r["new_wd"], "Workday"), (r.get("new_cx", 0), "added pools")) if n or lbl in ("ServiceNow", "AI/ML"))
+    split = " + ".join(f"{n} {lbl}" for lbl, n in r.get("by_pool", {}).items() if n) or "none"
     r["result"] = (f"{r['new']} new ({split})" if job == "Scraping"
                    else f"{r['enriched']} enriched, {r['rejected']} rejected" if job == "Enrichment"
                    else f"{r['checked']} checked, {r['changed']} changed" if job == "Refresh"
@@ -178,6 +184,14 @@ def parse(doc):
                    else f"{r['synced']} rows synced" if job == "Sync" else notes[:120])
     r["by"] = r["source"]
     return r
+
+
+def _sum_pools(runs):
+    out = {}
+    for r in runs:
+        for k, v in (r.get("by_pool") or {}).items():
+            out[k] = out.get(k, 0) + v
+    return out
 
 
 def _now():
@@ -257,7 +271,7 @@ def report(runs_raw, errors_raw, start, end):
         "now": now.strftime("%Y-%m-%d %H:%M"), "start": start, "end": end, "days": ndays, "today": today,
         "totals": {"runs": len(runs), "new": sum(r["new"] for r in runs), "new_sn": sum(r["new_sn"] for r in runs),
                    "new_ai": sum(r["new_ai"] for r in runs), "new_sf": sum(r["new_sf"] for r in runs),
-                   "new_wd": sum(r["new_wd"] for r in runs), "new_cx": sum(r.get("new_cx", 0) for r in runs), "enriched": sum(r["enriched"] for r in runs),
+                   "new_wd": sum(r["new_wd"] for r in runs), "new_cx": sum(r.get("new_cx", 0) for r in runs), "by_pool": _sum_pools(runs), "enriched": sum(r["enriched"] for r in runs),
                    "checked": sum(r["checked"] for r in runs), "changed": sum(r["changed"] for r in runs),
                    "cost": round(sum(r["cost"] for r in runs), 2),
                    "issues": sum(1 for r in runs if r["status"] != "ok") + len(missed) + len(errors),
@@ -280,7 +294,7 @@ def _card(job, runs, allruns, now, ndays):
         "job": job, "what": WHAT[job], "paused": PAUSED.get(job, ""), "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
         "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
         "health": round(100 * ok / len(mine)) if mine else None,
-        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "info", "new", "new_sn", "new_ai", "new_sf", "new_wd", "new_cx",
+        "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "info", "new", "new_sn", "new_ai", "new_sf", "new_wd", "new_cx", "by_pool",
                                        "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost", "matched",
                                        "emails_added", "credits", "work_found", "personal_found")} if last else None,
         "output": sum(r[out] for r in mine),
