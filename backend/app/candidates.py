@@ -289,6 +289,8 @@ class Candidates:
         out["has_email"] = bool(email)
         out["has_phone"] = bool(phone)
         out["company_domain"] = transfer.company_domain(v.get("current_company"), v.get("company_website"))
+        # city filled from the search (not from the profile) until enrichment confirms it -> shown as "~Pune"
+        out["city_guess"] = "location guessed from search" in str(v.get("notes") or "").lower() and v.get("data_status") == "Discovered"
         return out
 
     def all_views(self, user_id=None):

@@ -51,7 +51,7 @@ function PickLogo({ c, picked, onPick, size }) {
 }
 
 function Card({ c, picked, onPick }) {
-  const Line = ({ icon, v, empty, strong }) => <div className={"cline ic-" + icon + (v ? "" : " none") + (strong && v ? " strong" : "")}><span className="cic2"><Icon name={icon} size={13} /></span><span>{v || empty}</span></div>;
+  const Line = ({ icon, v, empty, strong, title }) => <div title={title} className={"cline ic-" + icon + (v ? "" : " none") + (strong && v ? " strong" : "")}><span className="cic2"><Icon name={icon} size={13} /></span><span>{v || empty}</span></div>;
   return (
     <a className={"card ccard" + (picked ? " picked" : "")} href={href(c.id)}>
       <div className="head"><PickLogo c={c} picked={picked} onPick={onPick} size="lg" />
@@ -66,7 +66,7 @@ function Card({ c, picked, onPick }) {
       ) : <div className="cexp none"><span>Experience not added yet</span></div>}
       <div className="clines">
         <Line icon="building" v={c.current_company} empty="Company not added" strong />
-        <Line icon="pin" v={[c.city, c.country && c.country !== "India" ? c.country : c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
+        <Line icon="pin" title={c.city_guess ? "Approximate: taken from the search, not yet confirmed from the LinkedIn profile" : undefined} v={(c.city_guess && c.city ? "~" : "") + [c.city, c.country && c.country !== "India" ? c.country : c.state].filter(Boolean).join(", ")} empty="Location not added" strong />
         <Line icon="cert" v={c.certifications && String(c.certifications).split(";")[0].trim()} empty="No certification" strong />
       </div>
       <div className="chips"><PoolChip pool={c.pool} /><StatusChip status={c.data_status} />{c.open_to_work === "Yes" && <span className="chip c-good">Open to work</span>}</div>
@@ -221,7 +221,7 @@ export default function Candidates({ query }) {
             <tr key={c.id} className={"click" + (picked.has(c.id) ? " picked" : "")} onClick={(e) => { if (!e.target.closest("button,.badge,input,.pickc")) go(href(c.id)); }}>
               <td className="pickc"><PickLogo c={c} picked={picked.has(c.id)} onPick={pick} size="md" /></td>
               <td><b>{c.name}</b></td><td><PoolChip pool={c.pool} /></td>
-              <td><div className="rolec"><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc">{c.city || "-"}{c.country && c.country !== "India" && <div className="small muted">{c.country}</div>}</td>
+              <td><div className="rolec"><div><b>{c.current_title || c.standard_title || "-"}</b>{c.current_company && <div className="small muted">{c.current_company}</div>}</div></div></td><td className="cityc" title={c.city_guess ? "Approximate: taken from the search" : undefined}>{c.city ? (c.city_guess ? "~" : "") + c.city : "-"}{c.country && c.country !== "India" && <div className="small muted">{c.country}</div>}</td>
               <td>{c.domain_experience_years != null || c.total_experience_years != null ? <span className="expchip">{c.domain_experience_years ?? "–"}<small> / {c.total_experience_years ?? "–"} yrs</small></span> : <span className="muted">-</span>}</td><td><StatusChip status={c.data_status} /></td>
               <td className="small contactc">{c.email && <div title={c.email}>{c.email}</div>}{c.phone && <div className="mono">{c.phone}</div>}{!c.email && !c.phone && <span className="muted">-</span>}</td>
               <td><Badge c={c} /></td><td className="small muted">{when(c.updated_at)}</td></tr>
