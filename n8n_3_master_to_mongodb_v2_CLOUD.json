@@ -1,0 +1,380 @@
+{
+  "name": "Master sheet to MongoDB sync v2 - 4 pools (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "867f80f9-9d1b-4030-844b-72ca87621818",
+      "name": "Schedule every hour (after scrape + enrichment)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "46924fa2-47a9-477b-86d4-5fa151a404c0",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "472989301",
+          "mode": "id",
+          "cachedResultName": "CANDIDATE_MASTER"
+        },
+        "options": {}
+      },
+      "id": "9dbe387c-bc93-4bc0-878b-8588ee008152",
+      "name": "Read CANDIDATE_MASTER",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        260,
+        100
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// CANDIDATE_MASTER rows -> MongoDB documents (LinkedIn URL = pehchaan), pool ke hisaab se\n// INCREMENTAL (4 Nov 2026): har ghante sirf pichle DAYS din me badli rows bhejo. Roz FULL_SYNC_HOUR baje sab rows (jo chhoot gaya wo bhi aa jaaye)\nconst DAYS = 2;               // kitne din purani badli rows bhejni hain\nconst FULL_SYNC_HOUR = 3;     // roz raat 3 baje (IST) poori sheet sync\n// ============================================\nconst nowIst = new Date(Date.now() + 5.5 * 3600e3);\nlet manual = false; try { manual = $execution.mode !== 'production'; } catch (e) {}\nconst full = nowIst.getUTCHours() === FULL_SYNC_HOUR || manual;   // manual run = poori sheet (jab bhi shak ho, manual chala do)\nconst since = new Date(nowIst - DAYS * 864e5).toISOString().slice(0, 10);\nconst now = new Date().toISOString();\nconst NUM = ['total_experience_years', 'domain_experience_years'];\nconst key = k => k.trim().toLowerCase().replace(/\\s*\\/\\s*/g, '_').replace(/[^a-z0-9_]+/g, '_');   // \"modules / specialization\" -> modules_specialization\n// sheet ki date: '2026-11-04' ya number (46330) dono samjho\nconst day = v => { if (v === '' || v == null) return ''; if (typeof v === 'number' || /^\\d{5}(\\.\\d+)?$/.test(String(v))) return new Date(Date.UTC(1899, 11, 30) + Number(v) * 864e5).toISOString().slice(0, 10); return String(v).slice(0, 10); };\n// URL ek hi format me: https://www.linkedin.com/in/<slug> (chhote akshar, koi / ? # nahi, in./uk. -> www.)\nconst normUrl = u => { const m = String(u || '').match(/linkedin\\.com\\/in\\/([^/?#\\s]+)/i); if (!m) return ''; let s = m[1]; try { s = decodeURIComponent(s); } catch (e) {} return `https://www.linkedin.com/in/${s.toLowerCase()}`; };\nconst seen = new Set();\nlet skipped = 0;\nconst out = [];\nfor (const it of $input.all()) {\n  const r = it.json;\n  const url = normUrl(r.linkedin_url || r['LinkedIn URL'] || r.linkedin);\n  if (!url || seen.has(url)) continue;\n  seen.add(url);\n  const doc = {};\n  for (const [k, v] of Object.entries(r)) if (k !== 'row_number') doc[key(k)] = typeof v === 'string' ? v.trim() : v;\n  if (!full) {\n    const changed = [doc.last_updated, doc.first_seen, doc.last_checked].map(day).some(d => d && d >= since);\n    if (!changed) { skipped++; continue; }\n  }\n  doc.linkedin_url = url;\n  for (const k of NUM) doc[k] = doc[k] === '' || doc[k] == null || isNaN(Number(doc[k])) ? null : Number(doc[k]);\n  doc.synced_at = now;\n  out.push({ json: doc });\n}\n// (n8n run me dikhega) kitni rows bheji / chhodi\nif (out.length) out[0].json._sync_note = `${full ? 'FULL' : 'INCREMENTAL since ' + since}: sending ${out.length}, skipped ${skipped} unchanged`;\nreturn out;\n"
+      },
+      "id": "69436826-2c53-4c91-b262-0a71d496afd2",
+      "name": "Prepare docs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(i => i.json.pool === 'ServiceNow');\n"
+      },
+      "id": "ea160f32-c83e-4ad2-94e2-b28a8ec8fd48",
+      "name": "Only ServiceNow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "pool,name,linkedin_url,standard_title,current_title,current_company,city,total_experience_years,domain_experience_years,experience_bucket,seniority,readiness,email,email_status,phone,phone_status,open_to_work,interest,availability,notice_period,expected_salary,consent,resume_status,last_contacted,modules_specialization,certifications,skills,past_employers,title_match,role_category,state,contact_source,source,source_flow,search_query,first_seen,last_updated,last_change,last_checked,notes,country,synced_at",
+        "options": {
+          "upsert": true
+        }
+      },
+      "id": "f6c009a3-e744-4b70-81a0-624426e46c45",
+      "name": "Upsert to ServiceNow MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(i => i.json.pool === 'AI/ML');\n"
+      },
+      "id": "b668db7e-6569-4abb-ae40-fe8e45d960c9",
+      "name": "Only AI/ML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "pool,name,linkedin_url,standard_title,current_title,current_company,city,total_experience_years,domain_experience_years,experience_bucket,seniority,readiness,email,email_status,phone,phone_status,open_to_work,interest,availability,notice_period,expected_salary,consent,resume_status,last_contacted,modules_specialization,certifications,skills,past_employers,title_match,role_category,state,contact_source,source,source_flow,search_query,first_seen,last_updated,last_change,last_checked,notes,country,synced_at",
+        "options": {
+          "upsert": true
+        }
+      },
+      "id": "be7f67a9-8f81-47c2-a908-a9fab016a073",
+      "name": "Upsert to AI/ML MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(i => i.json.pool === 'Salesforce');\n"
+      },
+      "id": "af744aa4-a421-4e48-b969-721509f2444e",
+      "name": "Only Salesforce",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "pool,name,linkedin_url,standard_title,current_title,current_company,city,total_experience_years,domain_experience_years,experience_bucket,seniority,readiness,email,email_status,phone,phone_status,open_to_work,interest,availability,notice_period,expected_salary,consent,resume_status,last_contacted,modules_specialization,certifications,skills,past_employers,title_match,role_category,state,contact_source,source,source_flow,search_query,first_seen,last_updated,last_change,last_checked,notes,country,synced_at",
+        "options": {
+          "upsert": true
+        }
+      },
+      "id": "73702546-6c74-48f5-ad8c-55a8929af811",
+      "name": "Upsert to Salesforce MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().filter(i => i.json.pool === 'Workday');\n"
+      },
+      "id": "ac0ba546-5892-480c-abb5-66637ed4b000",
+      "name": "Only Workday",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "pool,name,linkedin_url,standard_title,current_title,current_company,city,total_experience_years,domain_experience_years,experience_bucket,seniority,readiness,email,email_status,phone,phone_status,open_to_work,interest,availability,notice_period,expected_salary,consent,resume_status,last_contacted,modules_specialization,certifications,skills,past_employers,title_match,role_category,state,contact_source,source,source_flow,search_query,first_seen,last_updated,last_change,last_checked,notes,country,synced_at",
+        "options": {
+          "upsert": true
+        }
+      },
+      "id": "dcc3b503-b9f9-4b1c-974e-4b10935aa2bd",
+      "name": "Upsert to Workday MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Website par bane pools (MS Fabric Architect, ...): ek collection talent_app.candidates_custom\nconst MAIN = ['ServiceNow', 'AI/ML', 'Salesforce', 'Workday'];\nreturn $input.all().filter(i => i.json.pool && !MAIN.includes(i.json.pool));\n"
+      },
+      "id": "432ab0ba-f255-4da5-b972-f2eb7fc3f584",
+      "name": "Only added pools",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_custom",
+        "updateKey": "linkedin_url",
+        "fields": "pool,name,linkedin_url,standard_title,current_title,current_company,city,total_experience_years,domain_experience_years,experience_bucket,seniority,readiness,email,email_status,phone,phone_status,open_to_work,interest,availability,notice_period,expected_salary,consent,resume_status,last_contacted,modules_specialization,certifications,skills,past_employers,title_match,role_category,state,contact_source,source,source_flow,search_query,first_seen,last_updated,last_change,last_checked,notes,country,synced_at",
+        "options": {
+          "upsert": true
+        }
+      },
+      "id": "4425025e-396b-4716-a35b-a02e659c62d0",
+      "name": "Upsert to added pools MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Sheet -> MongoDB sync v2 (4 pools)\nHar ghante :55. INCREMENTAL: sirf pichle 2 din me badli rows (last_updated / first_seen / last_checked).\nRoz raat 3 baje + har MANUAL run = poori sheet. URL ek format me (www, chhote akshar).\nCANDIDATE_MASTER (chaaron tab + country) padhta hai.\nServiceNow -> Mongo ServiceNow | AI/ML -> Mongo AI_ML\nSalesforce -> Mongo Salesforce | Workday -> Mongo Workday (naya cluster)\nCollection: candidates_master. LinkedIn URL se match: naya = insert, purana = update.",
+        "width": 560,
+        "height": 240
+      },
+      "id": "700c342a-27f8-42b4-914d-941e1aaaf991",
+      "name": "Note b7f7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -420
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule every hour (after scrape + enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Read CANDIDATE_MASTER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read CANDIDATE_MASTER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CANDIDATE_MASTER": {
+      "main": [
+        [
+          {
+            "node": "Prepare docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare docs": {
+      "main": [
+        [
+          {
+            "node": "Only ServiceNow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only AI/ML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only Salesforce",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only Workday",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only added pools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only ServiceNow": {
+      "main": [
+        [
+          {
+            "node": "Upsert to ServiceNow MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only AI/ML": {
+      "main": [
+        [
+          {
+            "node": "Upsert to AI/ML MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Salesforce": {
+      "main": [
+        [
+          {
+            "node": "Upsert to Salesforce MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Workday": {
+      "main": [
+        [
+          {
+            "node": "Upsert to Workday MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only added pools": {
+      "main": [
+        [
+          {
+            "node": "Upsert to added pools MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}

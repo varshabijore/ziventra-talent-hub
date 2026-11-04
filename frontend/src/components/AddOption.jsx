@@ -7,7 +7,7 @@ import { Icon, Modal, useToast } from "./ui.jsx";
 
 const KINDS = [
   ["pool", "Pool", "MS Fabric Architect", "A new kind of talent. It shows up in the filters, Add candidate and Import, and n8n starts finding people for it in the next hourly run."],
-  ["role", "Role", "Data Engineer", "A job role inside a pool, like Developer or Architect."],
+  ["role", "Role", "Data Engineer", "A job role inside one pool (e.g. Data Engineer in AI/ML), or in all pools. New candidates of that pool get this role when their title matches."],
   ["country", "Country", "Germany", "A country to filter by and to pick on a candidate."],
   ["city", "City", "Hyderabad", "A city inside a country."],
   ["skill", "Skill", "FastAPI", "A skill to filter by. Pick a pool, or leave it for all pools."],
@@ -30,7 +30,7 @@ export default function AddOption({ onClose }) {
   const [err, setErr] = useState("");
   const [, label, example, help] = KINDS.find((k) => k[0] === kind);
   const needsCountry = kind === "city";
-  const hasPool = kind === "skill" || kind === "module";
+  const hasPool = kind === "skill" || kind === "module" || kind === "role";
 
   const call = async (body, done) => {
     setBusy(true); setErr("");
@@ -49,11 +49,14 @@ export default function AddOption({ onClose }) {
     });
   };
   const toggleScrape = (x) => call({ action: "update", kind: "pool", name: x.n, scrape: !x.on }, () => toast(`Scraping ${x.on ? "paused" : "on"} for “${x.n}”`));
+  const [edit, setEdit] = useState(null);   // {n, titles, keywords, modules} while editing a pool's search setup
+  const saveEdit = () => call({ action: "update", kind: "pool", name: edit.n, titles: edit.titles, keywords: edit.keywords, modules: edit.modules },
+    () => { toast(`Search setup saved for “${edit.n}”. Used from the next hourly run`); setEdit(null); });
   const remove = (x) => call({ action: "remove", kind, name: x.n, parent: x.p || "" }, () => toast(`“${x.n}” removed`));
   const list = {
-    pool: (opts?.pools || []).map((p) => ({ n: p.name, on: p.scrape !== false, pool: true,
+    pool: (opts?.pools || []).map((p) => ({ n: p.name, on: p.scrape !== false, pool: true, raw: p,
       d: [p.desc, p.titles?.length ? `Searches: ${p.titles.join(", ")}` : "", p.keywords?.length ? `Must mention: ${p.keywords.join(", ")}` : ""].filter(Boolean).join(" · ") })),
-    role: (opts?.roles || []).map((r) => ({ n: r })),
+    role: (opts?.roles || []).map((r) => (typeof r === "string" ? { n: r, d: "All pools" } : { n: r.name, p: r.pool, d: r.pool || "All pools" })),
     country: (opts?.countries || []).map((c) => ({ n: c })),
     city: (opts?.cities || []).map((c) => ({ n: c.name, p: c.country, d: c.country })),
     skill: (opts?.skills || []).map((x) => ({ n: x.name, p: x.pool, d: x.pool || "All pools" })),
@@ -99,9 +102,16 @@ export default function AddOption({ onClose }) {
         <div className="flabel">{label === "City" ? "Cities" : label === "Country" ? "Countries" : label + "s"} you added</div>
         {!list.length && <div className="small muted">None yet. The ones already in the data always show up in the filters.</div>}
         {list.map((x) => (
-          <div key={x.n + "|" + (x.p || "")} className="aorow"><div><b>{x.n}</b>{x.d && <div className="small muted">{x.d}</div>}</div>
-            <div className="aobtns">{x.pool && <button type="button" className="linkbtn" onClick={() => toggleScrape(x)} disabled={busy}>{x.on ? "Pause scraping" : "Start scraping"}</button>}
+          <div key={x.n + "|" + (x.p || "")}><div className="aorow"><div><b>{x.n}</b>{x.d && <div className="small muted">{x.d}</div>}</div>
+            <div className="aobtns">{x.pool && <button type="button" className="linkbtn" onClick={() => setEdit(edit?.n === x.n ? null : { n: x.n, titles: (x.raw.titles || []).join("\n"), keywords: (x.raw.keywords || []).join(", "), modules: (x.raw.modules || []).join(", ") })}>Edit search</button>}
+              {x.pool && <button type="button" className="linkbtn" onClick={() => toggleScrape(x)} disabled={busy}>{x.on ? "Pause scraping" : "Start scraping"}</button>}
               <button type="button" className="linkbtn" onClick={() => remove(x)} disabled={busy} title="Remove (only when no candidate uses it)">Remove</button></div></div>
+            {edit?.n === x.n && <div className="aoform aoedit">
+              <label className="f"><span>Job titles to search (one per line)</span><textarea rows={4} value={edit.titles} onChange={(e) => setEdit({ ...edit, titles: e.target.value })} /></label>
+              <label className="f"><span>Words the profile must mention</span><input value={edit.keywords} onChange={(e) => setEdit({ ...edit, keywords: e.target.value })} /></label>
+              <label className="f"><span>Modules / skills to tag</span><input value={edit.modules} onChange={(e) => setEdit({ ...edit, modules: e.target.value })} /></label>
+              <div className="actions"><button type="button" className="btn" onClick={() => setEdit(null)}>Cancel</button><button type="button" className="btn primary" onClick={saveEdit} disabled={busy}>Save</button></div>
+            </div>}</div>
         ))}
       </div>
     </Modal>

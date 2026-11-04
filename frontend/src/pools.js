@@ -16,5 +16,5 @@ export const poolColor = (name, i = 0) => (POOLS.find((p) => p.name === name) ||
 export function useAllPools() {
   const { data } = useCached("/options");
   const extra = (data?.pools || []).map((p, i) => ({ name: p.name, cls: "c-cx", color: EXTRA_COLORS[i % EXTRA_COLORS.length], desc: p.desc || "Added on the website", custom: true }));
-  return { pools: [...POOLS, ...extra], roles: data?.roles || [] };
+  return { pools: [...POOLS, ...extra], roles: (data?.roles || []).map((r) => (typeof r === "string" ? r : r.name)) };
 }

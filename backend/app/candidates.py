@@ -158,7 +158,9 @@ class Candidates:
     # ---------- filter options people added on the website (pools, roles, countries, cities, skills, modules) ----------
     def options(self):
         s = self.store.settings_get()
-        return {"pools": [dict(p) for p in s.get("custom_pools", [])], "roles": list(s.get("custom_roles", [])),
+        # roles belong to a pool ("Data Engineer" -> AI/ML); old ones saved as plain text belong to all pools
+        roles = [{"name": r, "pool": ""} if isinstance(r, str) else {"name": r.get("name", ""), "pool": r.get("pool", "")} for r in s.get("custom_roles", [])]
+        return {"pools": [dict(p) for p in s.get("custom_pools", [])], "roles": [r for r in roles if r["name"]],
                 "countries": list(s.get("custom_countries", [])), "cities": [dict(c) for c in s.get("custom_cities", [])],
                 "skills": [dict(x) for x in s.get("custom_skills", [])], "modules": [dict(x) for x in s.get("custom_modules", [])],
                 "all_pools": self.pool_names(), "all_countries": self.country_names()}
@@ -225,10 +227,11 @@ class Candidates:
                                                      "scrape": extra.get("scrape", True) is not False,
                                                      **self.search_setup(name, extra.get("titles"), extra.get("keywords"), extra.get("modules"))})
         elif kind == "role":
-            known = {str(v.get("role_category") or "").lower() for v in self.all_views()} | {r.lower() for r in s.get("custom_roles", [])}
-            if low in known:
-                return {"error": f"The role {name} already exists"}
-            s.setdefault("custom_roles", []).append(name)
+            known = {(str(v.get("role_category") or "").lower(), v.get("pool")) for v in self.all_views()} | \
+                    {(r["name"].lower(), r["pool"]) for r in self.options()["roles"]}
+            if (low, parent) in known or (low, "") in known:
+                return {"error": f"The role {name} already exists" + (f" in {parent}" if parent else "")}
+            s.setdefault("custom_roles", []).append({"name": name, "pool": parent})
         elif kind == "country":
             if low in {c.lower() for c in self.country_names()}:
                 return {"error": f"{name} is already in the list"}
@@ -257,13 +260,15 @@ class Candidates:
         s = self.store.settings_get()
         field = {"pool": "pool", "role": "role_category", "country": "country", "city": "city"}.get(kind)
         if field:
-            used = sum(1 for v in self.all_views() if v.get(field) == name and (kind != "city" or v.get("country") == parent))
+            used = sum(1 for v in self.all_views() if v.get(field) == name and (kind != "city" or v.get("country") == parent)
+                       and (kind != "role" or not parent or v.get("pool") == parent))
             if used:
                 return {"error": f"{used} candidate(s) still use {name}. Move or delete them first."}
         if kind == "pool":
             s["custom_pools"] = [p for p in s.get("custom_pools", []) if p["name"] != name]
         elif kind == "role":
-            s["custom_roles"] = [r for r in s.get("custom_roles", []) if r != name]
+            s["custom_roles"] = [r for r in s.get("custom_roles", [])
+                                 if not ((r == name and not parent) or (isinstance(r, dict) and r.get("name") == name and r.get("pool", "") == (parent or "")))]
         elif kind == "country":
             s["custom_countries"] = [c for c in s.get("custom_countries", []) if c != name]
         elif kind == "city":
@@ -431,7 +436,7 @@ class Candidates:
         }
         facets = {"cities": city_list, "countries": self.country_names(in_pool),
                   "skills": top("skills", "skills"), "modules": top("modules_specialization", "modules"),
-                  "pools": opt["all_pools"], "roles": sorted(set(cnt("role_category")) | set(opt["roles"])),
+                  "pools": opt["all_pools"], "roles": sorted(set(cnt("role_category")) | {r["name"] for r in opt["roles"] if not pool or not r["pool"] or r["pool"] == pool}),
                   "buckets": [b for b in ("0-2", "2-5", "5-8", "8+", "Unknown") if any(v.get("experience_bucket") == b for v in in_pool)],
                   "data_status": DATA_STATUS}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,

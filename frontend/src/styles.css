@@ -945,3 +945,4 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .aocheck{display:flex;gap:8px;align-items:center;font-size:13px}
 .aobtns{display:flex;gap:12px;flex-shrink:0}
 .aorow .small{max-width:440px}
+.aoedit{padding:12px;margin:-4px 0 8px;border:1px dashed var(--line);border-radius:10px}
