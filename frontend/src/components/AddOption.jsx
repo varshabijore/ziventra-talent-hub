@@ -6,7 +6,7 @@ import { useData, useCached } from "../context/DataContext.jsx";
 import { Icon, Modal, useToast } from "./ui.jsx";
 
 const KINDS = [
-  ["pool", "Pool", "Python Developer", "A new kind of talent. It shows up in the filters, in Add candidate and in Import."],
+  ["pool", "Pool", "MS Fabric Architect", "A new kind of talent. It shows up in the filters, Add candidate and Import, and n8n starts finding people for it in the next hourly run."],
   ["role", "Role", "Data Engineer", "A job role inside a pool, like Developer or Architect."],
   ["country", "Country", "Germany", "A country to filter by and to pick on a candidate."],
   ["city", "City", "Hyderabad", "A city inside a country."],
@@ -22,6 +22,10 @@ export default function AddOption({ onClose }) {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [parent, setParent] = useState("");
+  const [titles, setTitles] = useState("");
+  const [keywords, setKeywords] = useState("");
+  const [modules, setModules] = useState("");
+  const [scrape, setScrape] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [, label, example, help] = KINDS.find((k) => k[0] === kind);
@@ -38,13 +42,17 @@ export default function AddOption({ onClose }) {
   };
   const add = (e) => {
     e.preventDefault();
-    call({ action: "add", kind, name, desc, parent }, () => {
-      toast(`${label} “${name.trim()}” added${parent ? (needsCountry ? " in " : " for ") + parent : ""}`); setName(""); setDesc("");
+    const extra = kind === "pool" ? { titles, keywords, modules, scrape } : {};
+    call({ action: "add", kind, name, desc, parent, ...extra }, () => {
+      toast(`${label} “${name.trim()}” added${parent ? (needsCountry ? " in " : " for ") + parent : ""}${kind === "pool" && scrape ? ". Scraping starts in the next hourly run" : ""}`);
+      setName(""); setDesc(""); setTitles(""); setKeywords(""); setModules("");
     });
   };
+  const toggleScrape = (x) => call({ action: "update", kind: "pool", name: x.n, scrape: !x.on }, () => toast(`Scraping ${x.on ? "paused" : "on"} for “${x.n}”`));
   const remove = (x) => call({ action: "remove", kind, name: x.n, parent: x.p || "" }, () => toast(`“${x.n}” removed`));
   const list = {
-    pool: (opts?.pools || []).map((p) => ({ n: p.name, d: p.desc })),
+    pool: (opts?.pools || []).map((p) => ({ n: p.name, on: p.scrape !== false, pool: true,
+      d: [p.desc, p.titles?.length ? `Searches: ${p.titles.join(", ")}` : "", p.keywords?.length ? `Must mention: ${p.keywords.join(", ")}` : ""].filter(Boolean).join(" · ") })),
     role: (opts?.roles || []).map((r) => ({ n: r })),
     country: (opts?.countries || []).map((c) => ({ n: c })),
     city: (opts?.cities || []).map((c) => ({ n: c.name, p: c.country, d: c.country })),
@@ -71,8 +79,17 @@ export default function AddOption({ onClose }) {
           </select></label>}
         <label className="f"><span>{label} name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={example} maxLength={40} autoFocus /></label>
-        {kind === "pool" && <label className="f"><span>Short description (optional)</span>
-          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Django, FastAPI, backend developers" maxLength={80} /></label>}
+        {kind === "pool" && <>
+          <label className="f"><span>Job titles to search on LinkedIn <em className="muted">(one per line or comma; empty = the pool name)</em></span>
+            <textarea rows={3} value={titles} onChange={(e) => setTitles(e.target.value)} placeholder={"Microsoft Fabric Architect\nFabric Data Engineer\nPower BI Architect"} /></label>
+          <label className="f"><span>Words the profile must mention <em className="muted">(optional; default from the name, e.g. “fabric”)</em></span>
+            <input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="fabric, onelake, power bi" /></label>
+          <label className="f"><span>Modules / skills to tag <em className="muted">(optional)</em></span>
+            <input value={modules} onChange={(e) => setModules(e.target.value)} placeholder="OneLake, Lakehouse, Data Factory, Power BI" /></label>
+          <label className="f"><span>Short description (optional)</span>
+            <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Microsoft Fabric / data platform architects" maxLength={80} /></label>
+          <label className="aocheck"><input type="checkbox" checked={scrape} onChange={(e) => setScrape(e.target.checked)} /> Start finding candidates for this pool automatically (n8n, every hour)</label>
+        </>}
         {err && <div className="msg err">{err}</div>}
         <div className="actions"><button className="btn" type="button" onClick={onClose} disabled={busy}>Close</button>
           <button className="btn primary" type="submit" disabled={busy || name.trim().length < 2 || (needsCountry && !parent)}>
@@ -83,7 +100,8 @@ export default function AddOption({ onClose }) {
         {!list.length && <div className="small muted">None yet. The ones already in the data always show up in the filters.</div>}
         {list.map((x) => (
           <div key={x.n + "|" + (x.p || "")} className="aorow"><div><b>{x.n}</b>{x.d && <div className="small muted">{x.d}</div>}</div>
-            <button type="button" className="linkbtn" onClick={() => remove(x)} disabled={busy} title="Remove (only when no candidate uses it)">Remove</button></div>
+            <div className="aobtns">{x.pool && <button type="button" className="linkbtn" onClick={() => toggleScrape(x)} disabled={busy}>{x.on ? "Pause scraping" : "Start scraping"}</button>}
+              <button type="button" className="linkbtn" onClick={() => remove(x)} disabled={busy} title="Remove (only when no candidate uses it)">Remove</button></div></div>
         ))}
       </div>
     </Modal>

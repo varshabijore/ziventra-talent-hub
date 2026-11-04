@@ -236,10 +236,13 @@ async def options(request):
     except Exception:
         raise HTTPException(400, "Send JSON")
     kind, name = str(data.get("kind") or ""), str(data.get("name") or "")
-    if data.get("action") == "remove":
+    if data.get("action") == "update":
+        r = await run_in_threadpool(c.update_pool, name, data.get("scrape"), data.get("titles"), data.get("keywords"), data.get("modules"))
+    elif data.get("action") == "remove":
         r = await run_in_threadpool(c.remove_option, kind, name, str(data.get("parent") or ""))
     else:
-        r = await run_in_threadpool(c.add_option, kind, name, str(data.get("desc") or ""), str(data.get("parent") or ""))
+        r = await run_in_threadpool(c.add_option, kind, name, str(data.get("desc") or ""), str(data.get("parent") or ""),
+                                    {k: data.get(k) for k in ("titles", "keywords", "modules", "scrape") if k in data})
     if r.get("error"):
         return err(400, r["error"])
     log(request, u, f"option_{data.get('action') or 'add'}", f"{kind}: {name}")

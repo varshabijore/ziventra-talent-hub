@@ -6,7 +6,7 @@ import { go } from "../router.js";
 import Contacts from "./Contacts.jsx";
 // compact pool split for the KPI card: one thin bar + one line of coloured numbers (hover shows the pool name)
 function PoolSplit({ x }) {
-  const parts = [["ServiceNow", x.new_sn, "var(--sn)"], ["AI/ML", x.new_ai, "var(--ai)"], ["Salesforce", x.new_sf, "var(--sf)"], ["Workday", x.new_wd, "var(--wd)"]]
+  const parts = [["ServiceNow", x.new_sn, "var(--sn)"], ["AI/ML", x.new_ai, "var(--ai)"], ["Salesforce", x.new_sf, "var(--sf)"], ["Workday", x.new_wd, "var(--wd)"], ["Added pools", x.new_cx, "var(--muted)"]]
     .filter(([, n]) => n > 0);
   const total = parts.reduce((a, [, n]) => a + n, 0);
   if (!total) return <>no new candidates</>;
@@ -18,7 +18,7 @@ function PoolSplit({ x }) {
     </span>
   );
 }
-const split = (x, sep = ", ") => [[x.new_sn, "ServiceNow"], [x.new_ai, "AI/ML"], [x.new_sf, "Salesforce"], [x.new_wd, "Workday"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${n || 0} ${l}`).join(sep);
+const split = (x, sep = ", ") => [[x.new_sn, "ServiceNow"], [x.new_ai, "AI/ML"], [x.new_sf, "Salesforce"], [x.new_wd, "Workday"], [x.new_cx, "added pools"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${n || 0} ${l}`).join(sep);
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);

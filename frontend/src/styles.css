@@ -940,3 +940,8 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .aotabs button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .aotabs button[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
 .aoform select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:400;background:var(--panel);color:var(--ink)}
+.aoform textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-weight:400;background:var(--panel);color:var(--ink);resize:vertical}
+.aoform .f em{font-style:normal;font-weight:400}
+.aocheck{display:flex;gap:8px;align-items:center;font-size:13px}
+.aobtns{display:flex;gap:12px;flex-shrink:0}
+.aorow .small{max-width:440px}

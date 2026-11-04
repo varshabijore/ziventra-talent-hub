@@ -182,7 +182,35 @@ class Candidates:
             return POOL_KEY[label]
         return CUSTOM_KEY if any(p["name"] == label for p in self.options()["pools"]) else None
 
-    def add_option(self, kind, name, desc="", parent=""):
+    @staticmethod
+    def search_setup(name, titles=None, keywords=None, modules=None):
+        """What n8n searches for a pool added on the website. Empty parts get sensible defaults from the pool name."""
+        lst = lambda v, n, ln: [x for x in dict.fromkeys(re.sub(r"\s+", " ", t).strip()[:ln] for t in (v if isinstance(v, list) else re.split(r"[,;\n]+", str(v or "")))) if len(x) >= 2][:n]
+        titles = lst(titles, 15, 60) or [name]
+        generic = {"ms", "microsoft", "senior", "sr", "junior", "lead", "architect", "developer", "engineer", "consultant", "specialist", "analyst",
+                   "administrator", "admin", "expert", "manager", "the", "and", "of", "for", "with"}
+        # default: the name without generic job words, as ONE phrase ("Power Apps Developer" -> "power apps");
+        # too common on its own ("data", "cloud") -> the full name ("data engineer")
+        phrase = " ".join(w for w in re.findall(r"[a-z0-9+#.]+", name.lower()) if w not in generic)
+        common = {"data", "cloud", "ai", "it", "web", "software", "business", "full", "stack", "app", "apps", "power", "test", "network", "systems"}
+        keywords = lst(keywords, 15, 40) or [phrase if phrase and phrase not in common and len(phrase) >= 3 else name.lower()]
+        return {"titles": titles, "keywords": keywords, "modules": lst(modules, 20, 40)}
+
+    def update_pool(self, name, active=None, titles=None, keywords=None, modules=None):
+        s = self.store.settings_get()
+        for p in s.get("custom_pools", []):
+            if p["name"] == name:
+                if titles is not None or keywords is not None or modules is not None:
+                    p.update(self.search_setup(name, titles if titles is not None else p.get("titles"),
+                                               keywords if keywords is not None else p.get("keywords"), modules if modules is not None else p.get("modules")))
+                if active is not None:
+                    p["scrape"] = bool(active)
+                self.store.settings_put(s)
+                self._changed()
+                return {"ok": True, **self.options()}
+        return {"error": f"No added pool called {name}"}
+
+    def add_option(self, kind, name, desc="", parent="", extra=None):
         name = re.sub(r"\s+", " ", str(name or "")).strip()[:40]
         parent = str(parent or "").strip()
         if len(name) < 2:
@@ -192,7 +220,10 @@ class Candidates:
         if kind == "pool":
             if low in {p.lower() for p in self.pool_names()}:
                 return {"error": f"A pool called {name} already exists"}
-            s.setdefault("custom_pools", []).append({"name": name, "desc": str(desc or "").strip()[:80], "added": today_ist()})
+            extra = extra or {}
+            s.setdefault("custom_pools", []).append({"name": name, "desc": str(desc or "").strip()[:80], "added": today_ist(),
+                                                     "scrape": extra.get("scrape", True) is not False,
+                                                     **self.search_setup(name, extra.get("titles"), extra.get("keywords"), extra.get("modules"))})
         elif kind == "role":
             known = {str(v.get("role_category") or "").lower() for v in self.all_views()} | {r.lower() for r in s.get("custom_roles", [])}
             if low in known:
