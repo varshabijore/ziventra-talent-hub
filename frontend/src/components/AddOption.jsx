@@ -44,7 +44,7 @@ export default function AddOption({ onClose }) {
     e.preventDefault();
     const extra = kind === "pool" ? { titles, keywords, modules, scrape } : {};
     call({ action: "add", kind, name, desc, parent, ...extra }, () => {
-      toast(`${label} “${name.trim()}” added${parent ? (needsCountry ? " in " : " for ") + parent : ""}${kind === "pool" && scrape ? ". Scraping starts in the next hourly run" : ""}`);
+      toast(`${label}${/[,;\n]/.test(name) ? "s" : ""} “${name.trim().replace(/\s*[,;\n]+\s*/g, ", ")}” added${parent ? (needsCountry ? " in " : " for ") + parent : ""}${kind === "pool" && scrape ? ". Scraping starts in the next hourly run" : ""}`);
       setName(""); setDesc(""); setTitles(""); setKeywords(""); setModules("");
     });
   };
@@ -81,7 +81,10 @@ export default function AddOption({ onClose }) {
             <option value="">All pools</option>{(opts?.all_pools || []).map((p) => <option key={p}>{p}</option>)}
           </select></label>}
         <label className="f"><span>{label} name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={example} maxLength={40} autoFocus /></label>
+          {kind === "pool"
+            ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder={example} maxLength={40} autoFocus />
+            : <textarea rows={2} value={name} onChange={(e) => setName(e.target.value)} placeholder={`${example}  (add several: comma or one per line)`} autoFocus />}
+          {kind !== "pool" && <em className="muted small">Add several at once: separate with a comma or a new line. Each one max 40 letters.</em>}</label>
         {kind === "pool" && <>
           <label className="f"><span>Job titles to search on LinkedIn <em className="muted">(one per line or comma; empty = the pool name)</em></span>
             <textarea rows={3} value={titles} onChange={(e) => setTitles(e.target.value)} placeholder={"Microsoft Fabric Architect\nFabric Data Engineer\nPower BI Architect"} /></label>

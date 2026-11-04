@@ -213,6 +213,16 @@ class Candidates:
         return {"error": f"No added pool called {name}"}
 
     def add_option(self, kind, name, desc="", parent="", extra=None):
+        # several at once: "Power Apps Developer, Power Automate Developer" -> 2 roles (not for pools: a pool name is one name)
+        parts = [x.strip() for x in re.split(r"[,;\n]+", str(name or "")) if x.strip()]
+        if kind != "pool" and len(parts) > 1:
+            added, skipped = [], []
+            for one in parts:
+                r = self.add_option(kind, one, desc, parent, extra)
+                (skipped if r.get("error") else added).append(one)
+            if not added:
+                return {"error": "Already there: " + ", ".join(skipped)}
+            return {"ok": True, "added": added, "skipped": skipped, **self.options()}
         name = re.sub(r"\s+", " ", str(name or "")).strip()[:40]
         parent = str(parent or "").strip()
         if len(name) < 2:
