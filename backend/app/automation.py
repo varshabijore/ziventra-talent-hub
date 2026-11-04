@@ -14,19 +14,21 @@ IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
 # When each n8n workflow is scheduled (IST). Used for "next run" and "missed run".
 SCHEDULE = {
-    "Scraping": ["10:12", "13:12", "16:12", "18:12"],
-    "Enrichment": ["11:41", "18:41"],
-    "Refresh": ["15:41", "20:41"],
-    "Sync": ["10:45", "13:45", "16:45", "19:45"],
+    # fast mode (4 Nov 2026): every hour
+    "Scraping": [f"{h:02d}:12" for h in range(24)],
+    "Enrichment": [f"{h:02d}:41" for h in range(24)],
+    "Refresh": [],  # paused: its credits go to enrichment
+    "Sync": [f"{h:02d}:55" for h in range(24)],
     "Apollo": [],  # manual: started by hand in n8n (few credits)
     "Treg": ["12:11", "15:11", "18:11"],  # up to 200 per run: clears the backlog, then only new enriched candidates
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
-PAUSED = {"Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
+PAUSED = {"Refresh": "Paused for now: its Apify credits are used for enrichment. Most profiles are newer than 30 days, so there is nothing to re-check yet.",
+          "Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
 JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
 WHAT = {
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
-    "Enrichment": "Scrapes the full LinkedIn profile + email for Discovered candidates",
+    "Enrichment": "Scrapes the full LinkedIn profile for Discovered candidates; every 3rd hour it also searches emails for the top candidates",
     "Refresh": "Re-checks enriched profiles older than 30 days for LinkedIn changes",
     "Sync": "Copies the master sheet into MongoDB (what this website reads)",
     "Apollo": "Finds the personal mobile number from Apollo (run by hand, limited credits)",
@@ -131,7 +133,7 @@ def parse(doc):
     if job == "Scraping":
         if r["new"] == 0:
             iss.append("No new candidates were added")
-        if r["found"] and r["duplicates"] / r["found"] > 0.5:
+        if r["found"] and r["duplicates"] / r["found"] > 0.75:
             iss.append(f"{round(100 * r['duplicates'] / r['found'])}% of results were duplicates; searches need new keywords or cities")
         if r["google_results"] >= 60 and r["found"] < 0.3 * r["google_results"]:
             iss.append(f"Only {r['found']} of {r['google_results']} Google results were usable LinkedIn profiles")

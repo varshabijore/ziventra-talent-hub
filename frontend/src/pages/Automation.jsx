@@ -43,7 +43,7 @@ function lastLine(j) {
 
 function JobCard({ j, single }) {
   const l = j.last;
-  const [cls, label] = !j.logged ? ["mute", "Not connected yet"] : HEALTH[l.status] || HEALTH.ok;
+  const [cls, label] = j.paused ? ["mute", "Paused"] : !j.logged ? ["mute", "Not connected yet"] : HEALTH[l.status] || HEALTH.ok;
   const nextToday = j.next_run && j.next_run.slice(0, 10) === istToday();
   return (
     <div className={"panel jcard2 " + cls}>
@@ -52,7 +52,8 @@ function JobCard({ j, single }) {
         <span className={"pill " + cls}><span className="pdot" />{label}</span>
       </div>
       <p className="jwhat">{j.what}</p>
-      {j.logged ? (
+      {j.paused && <div className="jwarn">⏸ {j.paused}</div>}
+      {j.paused ? null : j.logged ? (
         <>
           <p className="jlast">{lastLine(j)}</p>
           {l.issues.length > 0 && <div className="jwarn">{l.issues.map((x, k) => <div key={k}>⚠ {x}</div>)}</div>}
@@ -65,8 +66,9 @@ function JobCard({ j, single }) {
       ) : (
         <p className="jlast muted">{j.job === "Apollo" ? "Apollo has not run yet. Import the Apollo workflow in n8n and run it once; the result will appear here." : "This workflow does not save its runs to the database yet. Add the \"Mongo run log\" node in n8n and its runs will appear here."}</p>
       )}
-      {j.schedule.length ? <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
-        <span className="muted"> · runs daily at {j.schedule.join(", ")}</span></div>
+      {j.paused ? <div className="jfoot"><Icon name="cal" size={13} /> <b>Paused</b><span className="muted"> · unpublished in n8n</span></div>
+        : j.schedule.length ? <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
+        <span className="muted"> · {j.schedule.length >= 24 ? `runs every hour at :${j.schedule[0].slice(3)}` : `runs daily at ${j.schedule.join(", ")}`}</span></div>
         : <div className="jfoot"><Icon name="cal" size={13} /> <b>Runs manually</b><span className="muted"> · start it in n8n when you want (limited credits)</span></div>}
     </div>
   );
