@@ -24,7 +24,8 @@ SCHEDULE = {
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
 PAUSED = {"Refresh": "Paused for now: its Apify credits are used for enrichment. Most profiles are newer than 30 days, so there is nothing to re-check yet.",
-          "Apollo": "Monthly credit limit reached on the current Apollo plan. Credits renew on 27 Nov 2026; phone lookups resume once credits are available."}
+          # Apollo: credits recharged 4 Nov 2026 (sir) -> no longer paused
+          }
 JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
 WHAT = {
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
