@@ -239,7 +239,7 @@ async def linkedin_accounts(request):
         d = await request.json() or {}
     except Exception:
         raise HTTPException(400, "Send JSON")
-    r = await run_in_threadpool(S["li"].connect, d.get("label"), d.get("cookie"), d.get("user_agent"), d.get("daily_limit"), u)
+    r = await run_in_threadpool(S["li"].connect, d.get("label"), d.get("cookie"), d.get("user_agent"), d.get("daily_limit"), u, d.get("jsessionid", ""))
     return err(400, r["error"]) if r.get("error") else ok(r)
 
 

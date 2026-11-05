@@ -12,13 +12,15 @@ function Connect({ onClose, onDone }) {
   const toast = useToast();
   const [label, setLabel] = useState("");
   const [cookie, setCookie] = useState("");
+  const [jsess, setJsess] = useState("");
   const [limit, setLimit] = useState(100);
+  const isExport = cookie.trim().startsWith("[");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const save = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try {
-      await api("/linkedin/accounts", { method: "POST", body: { label, cookie, daily_limit: limit, user_agent: navigator.userAgent } });
+      await api("/linkedin/accounts", { method: "POST", body: { label, cookie, jsessionid: jsess, daily_limit: limit, user_agent: navigator.userAgent } });
       toast(`“${label}” connected`); onDone(); onClose();
     } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
@@ -28,19 +30,22 @@ function Connect({ onClose, onDone }) {
       <ol className="listeps">
         <li>Log in to the LinkedIn account in <b>this browser</b> (Chrome).</li>
         <li>Press <b>F12</b> → <b>Application</b> → <b>Cookies</b> → <b>https://www.linkedin.com</b>.</li>
-        <li>Find <b>li_at</b> and copy its <b>Value</b> (long text). Paste it below.</li>
+        <li>Copy the <b>Value</b> of <b>li_at</b> (long text) and of <b>JSESSIONID</b> (ajax:…). Paste both below.</li>
       </ol>
       <form onSubmit={save} className="aoform">
         <label className="f"><span>Account name</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Test account 1" maxLength={40} autoFocus required /></label>
         <label className="f"><span>li_at cookie value</span>
           <input type="password" value={cookie} onChange={(e) => setCookie(e.target.value)} placeholder="AQEDA…" autoComplete="off" required />
           <em className="muted small">Saved encrypted. It is never shown again; “Disconnect” deletes it.</em></label>
+        {!isExport && <label className="f"><span>JSESSIONID cookie value</span>
+          <input type="password" value={jsess} onChange={(e) => setJsess(e.target.value)} placeholder="ajax:1234567890…" autoComplete="off" required />
+          <em className="muted small">Same Cookies list, the row named JSESSIONID. LinkedIn needs it for searches.</em></label>}
         <label className="f"><span>People per day (safe limit)</span>
           <input type="number" min={10} max={200} value={limit} onChange={(e) => setLimit(e.target.value)} />
           <em className="muted small">Guide: 50–100 per run, 1–2 runs a day. A new account should stay low.</em></label>
         {err && <div className="msg err">{err}</div>}
         <div className="actions"><button className="btn" type="button" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="btn primary" type="submit" disabled={busy || !label.trim() || cookie.trim().length < 20}><Icon name="link" /> {busy ? "Connecting…" : "Connect"}</button></div>
+          <button className="btn primary" type="submit" disabled={busy || !label.trim() || cookie.trim().length < 20 || (!isExport && jsess.trim().length < 8)}><Icon name="link" /> {busy ? "Connecting…" : "Connect"}</button></div>
       </form>
     </Modal>
   );

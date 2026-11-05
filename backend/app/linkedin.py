@@ -94,20 +94,50 @@ class LinkedInService:
                 used[r["account_id"]] = used.get(r["account_id"], 0) + int(r.get("count") or 0)
         return used
 
-    def connect(self, label, cookie, user_agent, daily_limit, user):
+    @staticmethod
+    def _cookies(cookie, jsession):
+        """Returns (list of cookies for the actor, li_at value) or an error string.
+        Accepts either the li_at + JSESSIONID values, or a whole Cookie-Editor JSON export pasted in the li_at box."""
+        raw = str(cookie or "").strip()
+        if raw.startswith("["):
+            try:
+                arr = json.loads(raw)
+            except ValueError:
+                return "The pasted cookie export is not valid JSON. Export again from Cookie-Editor and paste all of it."
+            arr = [c for c in arr if isinstance(c, dict) and "linkedin.com" in str(c.get("domain", "")) and c.get("name")]
+            keep = ("name", "value", "domain", "path", "secure", "httpOnly", "sameSite", "expirationDate")
+            arr = [{k: c[k] for k in keep if k in c} for c in arr]
+            names = {c["name"]: str(c.get("value", "")) for c in arr}
+            if not names.get("li_at") or not names.get("JSESSIONID"):
+                return "The export has no li_at / JSESSIONID: export while logged in to linkedin.com."
+            return arr, names["li_at"]
+        li = re.sub(r"\s+", "", raw).strip('"')
+        if li.lower().startswith("li_at="):
+            li = li[6:]
+        js = re.sub(r"\s+", "", str(jsession or "")).strip('"')
+        if js.upper().startswith("JSESSIONID="):
+            js = js[11:].strip('"')
+        if len(li) < 60 or not re.fullmatch(r"[A-Za-z0-9_\-%.=]+", li):
+            return "This does not look like an li_at cookie. Copy only the VALUE of li_at (F12 > Application > Cookies > https://www.linkedin.com)."
+        if not re.fullmatch(r"ajax:\d{6,}", js):
+            return "Paste the JSESSIONID value too (looks like ajax:1234567890123456789, same Cookies list as li_at)."
+        base = {"domain": ".www.linkedin.com", "path": "/", "secure": True}
+        return [{"name": "li_at", "value": li, "domain": ".linkedin.com", "path": "/", "secure": True, "httpOnly": True},
+                dict(base, name="JSESSIONID", value=f'"{js}"')], li
+
+    def connect(self, label, cookie, user_agent, daily_limit, user, jsessionid=""):
         label = str(label or "").strip()[:40]
-        cookie = re.sub(r"\s+", "", str(cookie or "")).strip().strip('"')
-        if cookie.lower().startswith("li_at="):
-            cookie = cookie[6:]
         if not label:
             return {"error": "Give the account a name (e.g. Test account 1)"}
-        if len(cookie) < 60 or not re.fullmatch(r"[A-Za-z0-9_\-%.=]+", cookie):
-            return {"error": "This does not look like an li_at cookie. Copy only the VALUE of li_at (F12 > Application > Cookies > linkedin.com)."}
+        got = self._cookies(cookie, jsessionid)
+        if isinstance(got, str):
+            return {"error": got}
+        jar, cookie = got
         try:
             limit = max(10, min(int(daily_limit or DEFAULT_DAILY), 200))
         except ValueError:
             limit = DEFAULT_DAILY
-        acc = {"id": secrets.token_hex(6), "label": label, "cookie_enc": encrypt(cookie), "hint": "••••" + cookie[-4:],
+        acc = {"id": secrets.token_hex(6), "label": label, "cookie_enc": encrypt(json.dumps(jar)), "hint": "••••" + cookie[-4:],
                "user_agent": str(user_agent or "")[:400], "daily_limit": limit, "status": "connected",
                "connected_at": _now(), "connected_by": user["name"], "found_total": 0, "added_total": 0}
         self.store.li_put("accounts", acc)
@@ -148,7 +178,9 @@ class LinkedInService:
                 cookie = decrypt(acc["cookie_enc"])
             except ValueError as e:
                 return {"error": str(e) + " Disconnect and connect the account again."}
-            inp = {"cookie": [{"name": "li_at", "value": cookie, "domain": ".linkedin.com", "path": "/", "secure": True, "httpOnly": True}],
+            if not cookie.startswith("["):
+                return {"error": "This account was connected with li_at only. LinkedIn also needs JSESSIONID: click Disconnect, then Connect account again with both values."}
+            inp = {"cookie": json.loads(cookie),
                    "searchUrl": url, "userAgent": acc.get("user_agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
                    "startPage": 1, "count": count, "minDelay": 5, "maxDelay": 15}
             try:
