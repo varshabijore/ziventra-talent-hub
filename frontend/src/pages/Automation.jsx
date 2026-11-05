@@ -48,7 +48,7 @@ const split = (x, sep = ", ", max = 3) => {
   return parts.length > max ? `${head} and ${parts.length - max} more pools` : head;
 };
 
-const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
+const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai", "Free sources": "c-good" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const nice = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const ST = { ok: ["c-good", "OK"], warning: ["c-warn", "Check"], error: ["c-bad", "Failed"] };
@@ -65,6 +65,7 @@ function lastLine(j) {
   if (j.job === "Scraping") return <>Last ran <b>{when}</b> and added <b>{l.new} new candidates</b> ({split(l)}).</>;
   if (j.job === "Enrichment") return <>Last ran <b>{when}</b> and enriched <b>{l.enriched} profiles</b>{l.emails_valid ? <>, {l.emails_valid} with a valid email</> : null}.</>;
   if (j.job === "Refresh") return <>Last ran <b>{when}</b> and re-checked <b>{l.checked} profiles</b>; {l.changed} had LinkedIn changes.</>;
+  if (j.job === "Free sources") return <>Last ran <b>{when}</b> and found <b>{fmt(l.leads)} new leads</b> on GitHub, Hugging Face and arXiv{l.leads_linkedin ? <>, {fmt(l.leads_linkedin)} already with a LinkedIn link</> : null}. Scraping links the rest to LinkedIn.</>;
   if (j.job === "Apollo") return <>Last ran <b>{when}</b> and matched <b>{l.matched} of {l.found} candidates</b>; {l.emails_added} new email{l.emails_added === 1 ? "" : "s"} added (~{l.credits} credits).</>;
   return <>Last ran <b>{when}</b>: {l.result}.</>;
 }
@@ -87,12 +88,12 @@ function JobCard({ j, single }) {
           {l.issues.length > 0 && <div className="jwarn">{l.issues.map((x, k) => <div key={k}>⚠ {x}</div>)}</div>}
           <div className="jstats">
             <div><b>{j.runs}{j.expected ? <small> / {j.expected}</small> : null}</b><span>runs {single ? "that day" : "in these days"}</span></div>
-            <div><b>{fmt(j.output)}</b><span>{j.job === "Scraping" ? "new candidates" : j.job === "Enrichment" ? "profiles enriched" : j.job === "Apollo" ? "candidates matched" : "profiles checked"}</span></div>
-            {j.job === "Apollo" ? <div><b>~{fmt(j.credits)}</b><span>Apollo credits</span></div> : <div><b>{money(j.cost)}</b><span>Apify cost</span></div>}
+            <div><b>{fmt(j.output)}</b><span>{j.job === "Scraping" ? "new candidates" : j.job === "Enrichment" ? "profiles enriched" : j.job === "Apollo" ? "candidates matched" : j.job === "Free sources" ? "new leads" : "profiles checked"}</span></div>
+            {j.job === "Apollo" ? <div><b>~{fmt(j.credits)}</b><span>Apollo credits</span></div> : j.job === "Free sources" ? <div><b>$0</b><span>free APIs</span></div> : <div><b>{money(j.cost)}</b><span>Apify cost</span></div>}
           </div>
         </>
       ) : (
-        <p className="jlast muted">{j.job === "Apollo" ? "Apollo has not run yet. Import the Apollo workflow in n8n and run it once; the result will appear here." : "This workflow does not save its runs to the database yet. Add the \"Mongo run log\" node in n8n and its runs will appear here."}</p>
+        <p className="jlast muted">{j.job === "Free sources" ? "Not running yet. Import the \"Free sources\" workflow in n8n, add the GitHub token and publish it; its runs will appear here." : j.job === "Apollo" ? "Apollo has not run yet. Import the Apollo workflow in n8n and run it once; the result will appear here." : "This workflow does not save its runs to the database yet. Add the \"Mongo run log\" node in n8n and its runs will appear here."}</p>
       )}
       {j.paused ? <div className="jfoot"><Icon name="cal" size={13} /> <b>Paused</b><span className="muted"> · unpublished in n8n</span></div>
         : j.schedule.length ? <div className="jfoot"><Icon name="cal" size={13} /> Next run <b>{j.next_run ? (nextToday ? "today " : "tomorrow ") + j.next_run.slice(11) : "-"}</b>
@@ -171,7 +172,7 @@ export default function Automation({ query }) {
             <div><h2>Run log</h2><p className="sub" style={{ margin: 0 }}>Every n8n run, newest first</p></div>
             <div className="ltools">
               <div className="seg" role="group" aria-label="Job">
-                {["", "Scraping", "Enrichment", "Refresh"].map((k) => <button key={k || "all"} type="button" aria-pressed={job === k} onClick={() => setJob(k)}>{k || "All"}</button>)}
+                {["", "Scraping", "Enrichment", "Free sources", "Refresh"].map((k) => <button key={k || "all"} type="button" aria-pressed={job === k} onClick={() => setJob(k)}>{k || "All"}</button>)}
               </div>
               <label className="chk"><input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} /> Only issues</label>
             </div>
@@ -185,7 +186,8 @@ export default function Automation({ query }) {
                     <td><span className={"chip " + JOB_TONE[r.job]}>{r.job}</span></td>
                     <td><span className={"chip " + (ST[r.status] || ST.ok)[0]}>{(ST[r.status] || ST.ok)[1]}</span></td>
                     <td className="mono">{r.found || "-"}</td>
-                    <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.job === "Apollo" ? r.matched : r.synced || "-"}</b>
+                    <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.job === "Apollo" ? r.matched : r.job === "Free sources" ? r.leads : r.synced || "-"}</b>
+                      {r.job === "Free sources" ? <div className="small muted">leads</div> : null}
                       {r.job === "Apollo" ? <div className="small muted">{r.emails_added} emails</div> : null}
                       {r.job === "Scraping" && r.new ? <div className="small muted runpools" title={split(r, ", ", 99)}>{(() => {
                         const parts = poolParts(r);

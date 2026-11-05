@@ -20,14 +20,16 @@ SCHEDULE = {
     "Refresh": [],  # paused: its credits go to enrichment
     "Sync": [f"{h:02d}:55" for h in range(24)],
     "Apollo": [],  # manual: started by hand in n8n (few credits)
-    "Treg": ["12:11", "15:11", "18:11"],  # up to 200 per run: clears the backlog, then only new enriched candidates
+    "Treg": ["12:11", "15:11", "18:11"],
+    "Free sources": ["02:25", "08:25", "14:25", "20:25"],  # GitHub / Hugging Face / arXiv -> Leads tab (free)  # up to 200 per run: clears the backlog, then only new enriched candidates
 }
 # Jobs that are switched off on purpose (shown as "Paused" instead of "Missed")
 PAUSED = {"Refresh": "Paused for now: its Apify credits are used for enrichment. Most profiles are newer than 30 days, so there is nothing to re-check yet.",
           # Apollo: credits recharged 4 Nov 2026 (sir) -> no longer paused
           }
-JOBS = ["Scraping", "Enrichment", "Refresh", "Apollo", "Treg", "Sync"]
+JOBS = ["Scraping", "Enrichment", "Refresh", "Free sources", "Apollo", "Treg", "Sync"]
 WHAT = {
+    "Free sources": "Finds developers and AI people on GitHub, Hugging Face and arXiv (free) and saves them as leads; scraping then links them to their LinkedIn",
     "Scraping": "Finds new LinkedIn profiles through Google search (Apify) and adds them to the sheet",
     "Enrichment": "Scrapes the full LinkedIn profile for Discovered candidates; every 3rd hour it also searches emails for the top candidates",
     "Refresh": "Re-checks enriched profiles older than 30 days for LinkedIn changes",
@@ -51,6 +53,8 @@ def _float(v):
 
 def job_of(flow, job=""):
     s = f"{job} {flow}".lower()
+    if "free source" in s:
+        return "Free sources"
     if "apollo" in s:
         return "Apollo"
     if "treg" in s:
@@ -136,6 +140,10 @@ def parse(doc):
         r["found"] = r["found"] or r["checked"]
     elif job == "Sync":
         r["synced"] = _int(d.get("synced") or added or notes)
+    r["leads"] = r["leads_linkedin"] = 0
+    if job == "Free sources":
+        r["leads"] = _int(d.get("leads")) if d.get("leads") is not None else _int(added)
+        r["leads_linkedin"] = _int(d.get("leads_linkedin"))
 
     # what went wrong (shown on the page)
     iss = r["issues"]
@@ -181,7 +189,8 @@ def parse(doc):
                    else f"{r['checked']} checked, {r['changed']} changed" if job == "Refresh"
                    else f"{r['matched']} matched, {r['emails_added']} emails added, ~{r['credits']} credits" if job == "Apollo"
                    else f"{r['checked']} checked: {r['work_found']} work + {r['personal_found']} personal emails, ${r['cost']}" if job == "Treg"
-                   else f"{r['synced']} rows synced" if job == "Sync" else notes[:120])
+                   else f"{r['synced']} rows synced" if job == "Sync"
+                   else f"{r['leads']} new leads ({r['leads_linkedin']} with LinkedIn)" if job == "Free sources" else notes[:120])
     r["by"] = r["source"]
     return r
 
@@ -210,7 +219,7 @@ def _next_run(job, now):
     return ""
 
 
-SHOWN_JOBS = ["Scraping", "Enrichment", "Refresh"]  # Sync is hidden until it writes a run log
+SHOWN_JOBS = ["Scraping", "Enrichment", "Free sources", "Refresh"]  # Sync is hidden until it writes a run log
 CONTACT_JOBS = ["Apollo", "Treg"]  # shown on the "Contacts" tab
 
 
@@ -289,14 +298,14 @@ def _card(job, runs, allruns, now, ndays):
     ever = [r for r in allruns if r["job"] == job]
     last = ever[0] if ever else None
     ok = sum(1 for r in mine if r["status"] == "ok")
-    out = {"Scraping": "new", "Enrichment": "enriched", "Apollo": "matched", "Treg": "emails_added"}.get(job, "checked")
+    out = {"Scraping": "new", "Enrichment": "enriched", "Apollo": "matched", "Treg": "emails_added", "Free sources": "leads"}.get(job, "checked")
     return {
         "job": job, "what": WHAT[job], "paused": PAUSED.get(job, ""), "schedule": SCHEDULE[job], "next_run": _next_run(job, now),
         "logged": bool(ever), "runs": len(mine), "ok": ok, "expected": len(SCHEDULE[job]) * ndays,
         "health": round(100 * ok / len(mine)) if mine else None,
         "last": {k: last[k] for k in ("run_at", "date", "time", "status", "result", "issues", "info", "new", "new_sn", "new_ai", "new_sf", "new_wd", "new_cx", "by_pool",
                                        "enriched", "checked", "changed", "emails_valid", "found", "duplicates", "cost", "matched",
-                                       "emails_added", "credits", "work_found", "personal_found")} if last else None,
+                                       "emails_added", "credits", "work_found", "personal_found", "leads", "leads_linkedin")} if last else None,
         "output": sum(r[out] for r in mine),
         "credits": sum(r["credits"] for r in mine),
         "cost": round(sum(r["cost"] for r in mine), 3),

@@ -1,0 +1,700 @@
+{
+  "name": "Free sources - GitHub, Hugging Face, arXiv leads (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "25 2,8,14,20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "e0e25f30-c574-431c-a648-cf77d7555481",
+      "name": "Every 6 hours (2:25, 8:25, 14:25, 20:25)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d92641b1-946b-4aba-a0bb-84a07a95fbcb",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "settings",
+        "query": "{}",
+        "options": {}
+      },
+      "id": "37e677db-7af2-4014-af9d-77f11a93c270",
+      "name": "Read custom pools",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        100
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1658721717",
+          "mode": "id",
+          "cachedResultName": "Leads"
+        },
+        "options": {}
+      },
+      "id": "a1eb0b42-f8c7-47e2-84df-65f277d1b384",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        100
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== 4 pools: ek hi jagah sab pool ki settings (scraping + enrichment dono me same) =====\nconst POOLS = {\n  ServiceNow: { label: 'ServiceNow', tab: 'ServiceNow', domainKey: 'servicenow_experience_years', modKey: 'modules',\n    titles: ['ServiceNow Developer','ServiceNow Administrator','ServiceNow Architect','ServiceNow Consultant','ServiceNow Technical Lead','ServiceNow ITSM Developer','ServiceNow ITOM','ServiceNow HRSD','ServiceNow CSM','ServiceNow SecOps','ServiceNow Business Analyst','ServiceNow Tester'],\n    rx: /service\\s?now|\\bsnow\\b|\\bitsm\\b|\\bitom\\b|\\bcmdb\\b|\\bhrsd\\b/i,\n    reject: /recruit|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|\\bsales\\b|business development|account (manager|executive)/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'], [/lead|manager/i, 'Lead'], [/./, 'Developer']],\n    mods: [['ITSM', /\\bitsm\\b|incident|change management|service catalog/i], ['ITOM', /\\bitom\\b|discovery|event management/i], ['CMDB', /\\bcmdb\\b/i], ['HRSD', /\\bhrsd\\b|\\bhr service/i],\n      ['CSM', /\\bcsm\\b|customer service management/i], ['SecOps', /secops|security operations/i], ['ITAM/SAM', /\\bitam\\b|\\bsam\\b|asset management/i], ['GRC/IRM', /\\bgrc\\b|\\birm\\b/i],\n      ['ITBM/SPM', /\\bitbm\\b|\\bspm\\b|\\bppm\\b/i], ['Service Portal', /service portal/i], ['Integrations', /integration|rest api/i], ['Flow Designer', /flow designer/i]],\n    std: { 'ServiceNow ITSM Developer': 'ServiceNow Developer', 'ServiceNow ITOM': 'ServiceNow Developer', 'ServiceNow HRSD': 'ServiceNow Developer', 'ServiceNow CSM': 'ServiceNow Developer', 'ServiceNow SecOps': 'ServiceNow Developer' } },\n  'AI/ML': { label: 'AI/ML', tab: 'AI_ML', domainKey: 'ai_ml_experience_years', modKey: 'specialization',\n    titles: ['Machine Learning Engineer','GenAI Engineer','LLM Engineer','AI Engineer','Data Scientist','Computer Vision Engineer','NLP Engineer','MLOps Engineer','AI Architect','Applied Scientist','Deep Learning Engineer','AI/ML Engineer'],\n    rx: /machine learning|\\bml\\b|\\bai\\b|artificial intelligence|gen\\s?ai|generative|\\bllms?\\b|data scien|computer vision|\\bnlp\\b|deep learning|mlops|\\bagentic\\b|applied scientist|research scientist/i,\n    reject: /recruit|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|\\bsales\\b|business development|account (manager|executive)/i,\n    roles: [[/gen\\s?ai|generative|llm|agentic/i, 'GenAI'], [/data engineer/i, 'Data Engineering'], [/\\bai engineer|artificial intelligence engineer|ai\\/ml engineer/i, 'AI Engineering'], [/vision/i, 'Computer Vision'], [/nlp|language/i, 'NLP'], [/mlops/i, 'MLOps'], [/data scien/i, 'Data Science'], [/research|applied scien/i, 'Research'], [/./, 'ML Engineering']],\n    mods: [['GenAI', /gen\\s?ai|generative/i], ['LLMs', /\\bllms?\\b|large language/i], ['RAG', /\\brag\\b|retrieval/i], ['Agentic AI', /agentic|ai agents?|multi-agent|langgraph/i],\n      ['Computer Vision', /computer vision|\\bcv\\b|image|yolo|opencv/i], ['NLP', /\\bnlp\\b|natural language|bert/i], ['MLOps', /mlops|mlflow|kubeflow/i], ['Data Science', /data scien/i], ['Deep Learning', /deep learning|pytorch|tensorflow|keras/i]],\n    std: { 'AI/ML Engineer': 'Machine Learning Engineer', 'Deep Learning Engineer': 'Machine Learning Engineer', 'GenAI Engineer': 'Generative AI / LLM Engineer', 'LLM Engineer': 'Generative AI / LLM Engineer', 'Applied Scientist': 'Applied / Research Scientist' } },\n  Salesforce: { label: 'Salesforce', tab: 'Salesforce', domainKey: 'salesforce_experience_years', modKey: 'modules',\n    titles: ['Salesforce Developer','Salesforce Administrator','Salesforce Architect','Salesforce Consultant','Salesforce Technical Lead','Salesforce Business Analyst','Salesforce CPQ','Salesforce Marketing Cloud','Salesforce Service Cloud','Salesforce Lightning Developer','Salesforce QA','Salesforce Integration Developer'],\n    rx: /salesforce|\\bsfdc\\b|\\bapex\\b|lightning web|\\blwc\\b|\\bcpq\\b|marketing cloud|service cloud|sales cloud|vlocity|omnistudio|agentforce/i,\n    reject: /recruit|talent acquisition|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales (executive|representative|associate|officer)\\b|inside sales/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'], [/lead|manager/i, 'Lead'], [/./, 'Developer']],\n    mods: [['Sales Cloud', /sales cloud/i], ['Service Cloud', /service cloud/i], ['Marketing Cloud', /marketing cloud|pardot|account engagement/i], ['Experience Cloud', /experience cloud|community cloud/i],\n      ['CPQ / Revenue', /\\bcpq\\b|revenue cloud|billing/i], ['Apex', /\\bapex\\b/i], ['LWC', /\\blwc\\b|lightning web/i], ['Flows', /\\bflows?\\b|process builder/i], ['Integrations', /integration|mulesoft|rest api/i],\n      ['Field Service', /field service/i], ['Data Cloud', /data cloud|\\bcdp\\b/i], ['Analytics', /crm analytics|tableau|einstein analytics/i], ['Commerce', /b2b commerce|b2c commerce|commerce cloud/i], ['Industries', /health cloud|financial services cloud|vlocity|omnistudio/i], ['Agentforce', /agentforce|einstein/i]],\n    std: { 'Salesforce Lightning Developer': 'Salesforce Developer', 'Salesforce Integration Developer': 'Salesforce Developer', 'Salesforce CPQ': 'Salesforce Consultant', 'Salesforce Marketing Cloud': 'Salesforce Consultant', 'Salesforce Service Cloud': 'Salesforce Consultant', 'Salesforce QA': 'Salesforce Tester' } },\n  Workday: { label: 'Workday', tab: 'Workday', domainKey: 'workday_experience_years', modKey: 'modules',\n    titles: ['Workday HCM Consultant','Workday Integration Developer','Workday Consultant','Workday Analyst','Workday Technical Consultant','Workday Financials Consultant','Workday Payroll Consultant','Workday Report Writer','Workday Architect','Workday Administrator','Workday Developer','Workday Business Analyst'],\n    rx: /workday/i,\n    reject: /\\brecruiter\\b|talent acquisition (specialist|partner|lead)|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales\\b/i,\n    roles: [[/integration|studio|\\beib\\b|developer/i, 'Integration'], [/architect/i, 'Architect'], [/report|prism/i, 'Reporting'], [/financ|accounting/i, 'Financials'], [/payroll/i, 'Payroll'], [/admin|hris/i, 'Administrator'], [/analyst/i, 'Analyst'], [/lead|manager/i, 'Lead'], [/./, 'Consultant']],\n    mods: [['Core HCM', /\\bhcm\\b|core hr/i], ['Payroll', /payroll/i], ['Absence/Time', /absence|time tracking/i], ['Benefits', /benefits/i], ['Compensation', /compensation|advanced comp/i],\n      ['Recruiting', /recruiting/i], ['Talent/Learning', /talent management|performance|learning/i], ['Financials', /financials?|accounting|procurement|expenses/i],\n      ['Integrations', /integration|\\beib\\b|studio|core connector|\\bpeci\\b|\\bpicof\\b/i], ['Reporting', /report|prism|dashboards?/i], ['Security', /security/i], ['Adaptive Planning', /adaptive/i], ['Student / Grants', /workday student|grants management/i], ['Extend', /workday extend/i]],\n    std: { 'Workday Technical Consultant': 'Workday Integration Developer', 'Workday Developer': 'Workday Integration Developer', 'Workday Report Writer': 'Workday Reporting Analyst' } },\n};\nconst TAB_POOL = Object.fromEntries(Object.values(POOLS).map(p => [p.tab, p]));\n// ===== Website par \"Add option -> Pool\" se bane pools (MongoDB talent_app.settings -> custom_pools). n8n me kuch badalna nahi padta =====\n// Sab added pools ek hi sheet tab \"Custom\" me jaate hain (pool column ke saath), MongoDB talent_app.candidates_custom me.\nconst esc = x => String(x).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&').replace(/\\s+/g, '\\\\s*');\nlet CUSTOM_POOLS = [], CUSTOM_ROLES = [];\ntry {\n  const doc = $('Read custom pools').all().map(i => i.json).find(d => d && (Array.isArray(d.custom_pools) || Array.isArray(d.custom_roles))) || {};\n  CUSTOM_POOLS = (doc.custom_pools || []).filter(c => c && c.name);\n  // website ke roles: {name, pool} (pool khaali = sab pools). Purane text wale bhi chalte hain\n  CUSTOM_ROLES = (doc.custom_roles || []).map(r => typeof r === 'string' ? { name: r, pool: '' } : r).filter(r => r && r.name);\n} catch (e) { CUSTOM_POOLS = []; CUSTOM_ROLES = []; }\nfor (const c of CUSTOM_POOLS) {\n  if (POOLS[c.name]) continue;\n  const kw = (c.keywords && c.keywords.length ? c.keywords : [c.name]).map(esc);\n  const titles = (c.titles && c.titles.length ? c.titles : [c.name]).slice(0, 15);\n  POOLS[c.name] = {\n    label: c.name, tab: 'Custom', custom: true, scrape: c.scrape !== false, domainKey: 'domain_experience_years', modKey: 'modules',\n    titles, rx: new RegExp(`(^|[^a-z0-9])(${kw.join('|')})([^a-z0-9]|$)`, 'i'),\n    reject: /\\brecruiter\\b|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales (executive|representative|associate|officer|manager)\\b|inside sales/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'],\n      [/analyst/i, 'Analyst'], [/lead|manager|head/i, 'Lead'], [/engineer/i, 'Engineer'], [/./, 'Developer']],\n    mods: (c.modules || []).map(m => [m, new RegExp(esc(m), 'i')]),\n    std: {},\n  };\n}\n// website par bane roles sabse pehle check hote hain (us pool ke, ya sab pools ke): \"Data Engineer\" title -> role \"Data Engineer\"\nfor (const P of Object.values(POOLS)) {\n  const mine = CUSTOM_ROLES.filter(r => !r.pool || r.pool === P.label).map(r => [new RegExp(esc(r.name), 'i'), r.name]);\n  if (mine.length) P.roles = [...mine, ...P.roles];\n}\n// pool ka naam row se (Custom tab) ya tab se (4 purane)\nconst poolOf = (tab, row) => tab === 'Custom' ? POOLS[row && row.pool] : TAB_POOL[tab];\n\n// ===== FREE SOURCES (5 Nov 2026): har pool ke liye apne aap source chunna -> GitHub / Hugging Face / arXiv =====\n// Naye pool par kuch badalna nahi: pool ke naam + keywords se category banti hai.\nconst GH_PER_RUN = 12;      // GitHub searches per run (har search 30 log)   - free (GitHub token)\nconst HF_PER_RUN = 6;       // Hugging Face model searches per run           - free\nconst AX_PER_RUN = 4;       // arXiv searches per run (har search 25 papers) - free\n// developer / data / AI / hardware type pools -> GitHub\nconst GH_RX = /python|data engineer|data platform|machine learning|machine learning|\\bml\\b|\\bai\\b|llm|gen\\s?ai|generative|mlops|llmops|databricks|snowflake|spark|fabric|power\\s?apps|fpga|verilog|asic|rtl|red\\s?team|devops|cloud|kubernetes|\\bjava\\b|react|node|golang|rust/i;\n// AI / research type pools -> Hugging Face + arXiv\nconst AI_RX = /\\bai\\b|a\\/i|machine learning|\\bml\\b|llm|gen\\s?ai|generative|nlp|computer vision|deep learning|red\\s?team|agentic|multi-agent|mlops|llmops|data scien/i;\nconst AX_RX = new RegExp(AI_RX.source + '|fpga|asic|verification|semiconductor|low latency', 'i');\n// built-in pools: search terms (website wale pools ke keywords apne aap use hote hain)\nconst TERMS = {\n  'AI/ML': ['machine learning', 'llm', 'generative ai', 'mlops', 'computer vision', 'nlp', 'data scientist', 'deep learning'],\n  ServiceNow: ['servicenow'], Salesforce: ['salesforce'], Workday: ['workday'],\n};\nconst LOCS = ['India', 'Bengaluru', 'Bangalore', 'Hyderabad', 'Pune', 'Chennai', 'Mumbai', 'Delhi', 'Noida', 'Gurugram', 'Kolkata', 'Ahmedabad', 'Kochi',\n  'United States', 'San Francisco', 'New York', 'Seattle', 'United Kingdom', 'London', 'Canada', 'Toronto', 'Germany', 'Berlin', 'Netherlands', 'Singapore', 'Australia', 'Dubai', 'Ireland'];\n// =============================================\nconst state = $getWorkflowStaticData('global');            // har search kahan tak pahunchi (agla page) - sirf scheduled run me save hota hai\nstate.done = state.done || {};\nconst termsOf = (name, P) => {\n  if (TERMS[name]) return TERMS[name];\n  const c = CUSTOM_POOLS.find(x => x.name === name) || {};\n  const kw = (c.keywords && c.keywords.length ? c.keywords : [name]).map(k => String(k).trim()).filter(Boolean);\n  return [...new Set(kw)].slice(0, 6);\n};\nconst pools = Object.keys(POOLS).filter(p => POOLS[p].scrape !== false);\n// category sirf pool ke naam + keywords se (titles me 'Developer' hone se ServiceNow GitHub par nahi jaana chahiye)\nconst text = p => `${p} ${termsOf(p).join(' ')}`;\nconst gh = [], hf = [], ax = [];\nfor (const p of pools) {\n  const terms = termsOf(p);\n  if (GH_RX.test(text(p))) for (const t of terms) for (const loc of LOCS) gh.push({ pool: p, term: t, loc });\n  if (AI_RX.test(text(p))) for (const t of terms) hf.push({ pool: p, term: t });\n  if (AX_RX.test(text(p))) for (const t of terms) ax.push({ pool: p, term: t });\n}\n// har source me pehle wo searches jo kabhi nahi chali, phir jinka agla page baaki hai; pools baari-baari\nfunction choose(list, keyOf, n) {\n  const fresh = list.filter(x => !state.done[keyOf(x)]);\n  const more = list.filter(x => { const d = state.done[keyOf(x)]; return d && d.next && d.n < 5; });\n  const byPool = {};\n  for (const x of [...fresh, ...more]) (byPool[x.pool] = byPool[x.pool] || []).push(x);\n  const lines = Object.values(byPool), out = [];\n  while (out.length < n && lines.some(l => l.length)) for (const l of lines) if (l.length && out.length < n) out.push(l.shift());\n  return out;\n}\nconst ghKey = x => `gh|${x.pool}|${x.term}|${x.loc}`.toLowerCase();\nconst hfKey = x => `hf|${x.pool}|${x.term}`.toLowerCase();\nconst axKey = x => `ax|${x.pool}|${x.term}`.toLowerCase();\nconst GQL = 'query($q:String!,$after:String){search(query:$q,type:USER,first:30,after:$after){userCount pageInfo{endCursor hasNextPage} nodes{... on User{login name bio company location email websiteUrl url followers{totalCount} socialAccounts(first:6){nodes{provider url}} topRepositories(first:5,orderBy:{field:STARGAZERS,direction:DESC}){nodes{name stargazerCount primaryLanguage{name}}}}}}}';\nconst items = [];\nfor (const x of choose(gh, ghKey, GH_PER_RUN)) {\n  const d = state.done[ghKey(x)] || {};\n  items.push({ src: 'github', key: ghKey(x), pool: x.pool, term: x.term, loc: x.loc, page: (d.n || 0) + 1,\n    body: { query: GQL, variables: { q: `\"${x.term}\" in:bio location:\"${x.loc}\" type:user sort:followers`, after: d.next || null } } });\n}\nfor (const x of choose(hf, hfKey, HF_PER_RUN)) {\n  const d = state.done[hfKey(x)] || {};\n  items.push({ src: 'hf', key: hfKey(x), pool: x.pool, term: x.term, page: (d.n || 0) + 1,\n    url: `https://huggingface.co/api/models?search=${encodeURIComponent(x.term)}&sort=downloads&direction=-1&limit=100` });\n}\nfor (const x of choose(ax, axKey, AX_PER_RUN)) {\n  const d = state.done[axKey(x)] || {};\n  const start = (d.n || 0) * 25;\n  items.push({ src: 'arxiv', key: axKey(x), pool: x.pool, term: x.term, page: (d.n || 0) + 1,\n    url: `http://export.arxiv.org/api/query?search_query=${encodeURIComponent(`all:\"${x.term}\"`)}&sortBy=submittedDate&sortOrder=descending&start=${start}&max_results=25` });\n}\n// har source ki kam se kam 1 line, taaki aage ke nodes kabhi khaali na rahen (skip wali line kuch nahi karti)\nfor (const s of ['github', 'hf', 'arxiv']) if (!items.some(i => i.src === s)) items.push({ src: s, skip: true });\nreturn items.map(i => ({ json: i }));\n"
+      },
+      "id": "6864b416-1e73-49ba-841a-e2d2bddbc707",
+      "name": "Plan source calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plan me se sirf github wali lines\nreturn $('Plan source calls').all().filter(i => i.json.src === 'github');\n"
+      },
+      "id": "7c6ef606-44b0-43b1-ab3b-48b4563541eb",
+      "name": "GitHub calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/graphql",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ziventra-talent-hub"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || { query: '{ viewer { login } }' }) }}"
+      },
+      "id": "1658bcb0-daf5-4d4a-9fa8-01a778f033a8",
+      "name": "GitHub search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plan me se sirf hf wali lines\nreturn $('Plan source calls').all().filter(i => i.json.src === 'hf');\n"
+      },
+      "id": "83c312fc-4522-4dd3-9b23-e3b656ca0bc8",
+      "name": "Hugging Face calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url || 'https://huggingface.co/api/models?limit=1' }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ziventra-talent-hub"
+            }
+          ]
+        }
+      },
+      "id": "4b7ad16b-8e84-44f5-903b-b4947231ed31",
+      "name": "Hugging Face models search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hugging Face: models search -> unke banane wale (authors). Organisations baad me apne aap hat jaati hain (overview me type != user)\nconst MAX_AUTHORS = 30, PER_TERM = 8;\nconst calls = $('Hugging Face calls').all().map(i => i.json);\nconst resps = $('Hugging Face models search').all().map(i => i.json);\nconst known = new Set($('Read Leads').all().map(i => String(i.json.lead_id || '').toLowerCase()).filter(Boolean));\nconst out = [], seen = new Set();\ncalls.forEach((c, i) => {\n  if (c.skip) return;\n  const body = (resps[i] || {}).body;\n  const models = Array.isArray(body) ? body : [];\n  const count = {};\n  for (const m of models) {\n    const a = String(m.author || String(m.id || m.modelId || '').split('/')[0] || '').trim();\n    if (!a) continue;\n    count[a] = (count[a] || 0) + 1 + Math.log10(1 + (Number(m.downloads) || 0)) / 3;\n  }\n  Object.entries(count).sort((x, y) => y[1] - x[1])\n    .filter(([a]) => !known.has(`hf:${a.toLowerCase()}`) && !seen.has(a.toLowerCase()))\n    .slice(0, PER_TERM)\n    .forEach(([a]) => { if (out.length < MAX_AUTHORS) { seen.add(a.toLowerCase()); out.push({ pool: c.pool, term: c.term, key: c.key, author: a,\n      url: `https://huggingface.co/api/users/${encodeURIComponent(a)}/overview` }); } });\n});\nif (!out.length) out.push({ skip: true, url: 'https://huggingface.co/api/models?limit=1' });\nreturn out.map(x => ({ json: x }));\n"
+      },
+      "id": "6b3f6028-92be-49ab-8e93-64d10c490e4f",
+      "name": "Hugging Face authors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        100
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ziventra-talent-hub"
+            }
+          ]
+        }
+      },
+      "id": "561bea15-9bd8-4162-997a-6d8eecfec076",
+      "name": "Hugging Face profiles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plan me se sirf arxiv wali lines\nreturn $('Plan source calls').all().filter(i => i.json.src === 'arxiv');\n"
+      },
+      "id": "7b6e1a86-db3a-46f0-97b6-ec9558b5fe13",
+      "name": "arXiv calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        100
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url || 'http://export.arxiv.org/api/query?search_query=all:test&max_results=0' }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3500
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "ziventra-talent-hub"
+            }
+          ]
+        }
+      },
+      "id": "9d1b3de2-21ea-4044-8ba3-d44cfed01eda",
+      "name": "arXiv search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== 4 pools: ek hi jagah sab pool ki settings (scraping + enrichment dono me same) =====\nconst POOLS = {\n  ServiceNow: { label: 'ServiceNow', tab: 'ServiceNow', domainKey: 'servicenow_experience_years', modKey: 'modules',\n    titles: ['ServiceNow Developer','ServiceNow Administrator','ServiceNow Architect','ServiceNow Consultant','ServiceNow Technical Lead','ServiceNow ITSM Developer','ServiceNow ITOM','ServiceNow HRSD','ServiceNow CSM','ServiceNow SecOps','ServiceNow Business Analyst','ServiceNow Tester'],\n    rx: /service\\s?now|\\bsnow\\b|\\bitsm\\b|\\bitom\\b|\\bcmdb\\b|\\bhrsd\\b/i,\n    reject: /recruit|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|\\bsales\\b|business development|account (manager|executive)/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'], [/lead|manager/i, 'Lead'], [/./, 'Developer']],\n    mods: [['ITSM', /\\bitsm\\b|incident|change management|service catalog/i], ['ITOM', /\\bitom\\b|discovery|event management/i], ['CMDB', /\\bcmdb\\b/i], ['HRSD', /\\bhrsd\\b|\\bhr service/i],\n      ['CSM', /\\bcsm\\b|customer service management/i], ['SecOps', /secops|security operations/i], ['ITAM/SAM', /\\bitam\\b|\\bsam\\b|asset management/i], ['GRC/IRM', /\\bgrc\\b|\\birm\\b/i],\n      ['ITBM/SPM', /\\bitbm\\b|\\bspm\\b|\\bppm\\b/i], ['Service Portal', /service portal/i], ['Integrations', /integration|rest api/i], ['Flow Designer', /flow designer/i]],\n    std: { 'ServiceNow ITSM Developer': 'ServiceNow Developer', 'ServiceNow ITOM': 'ServiceNow Developer', 'ServiceNow HRSD': 'ServiceNow Developer', 'ServiceNow CSM': 'ServiceNow Developer', 'ServiceNow SecOps': 'ServiceNow Developer' } },\n  'AI/ML': { label: 'AI/ML', tab: 'AI_ML', domainKey: 'ai_ml_experience_years', modKey: 'specialization',\n    titles: ['Machine Learning Engineer','GenAI Engineer','LLM Engineer','AI Engineer','Data Scientist','Computer Vision Engineer','NLP Engineer','MLOps Engineer','AI Architect','Applied Scientist','Deep Learning Engineer','AI/ML Engineer'],\n    rx: /machine learning|\\bml\\b|\\bai\\b|artificial intelligence|gen\\s?ai|generative|\\bllms?\\b|data scien|computer vision|\\bnlp\\b|deep learning|mlops|\\bagentic\\b|applied scientist|research scientist/i,\n    reject: /recruit|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|\\bsales\\b|business development|account (manager|executive)/i,\n    roles: [[/gen\\s?ai|generative|llm|agentic/i, 'GenAI'], [/data engineer/i, 'Data Engineering'], [/\\bai engineer|artificial intelligence engineer|ai\\/ml engineer/i, 'AI Engineering'], [/vision/i, 'Computer Vision'], [/nlp|language/i, 'NLP'], [/mlops/i, 'MLOps'], [/data scien/i, 'Data Science'], [/research|applied scien/i, 'Research'], [/./, 'ML Engineering']],\n    mods: [['GenAI', /gen\\s?ai|generative/i], ['LLMs', /\\bllms?\\b|large language/i], ['RAG', /\\brag\\b|retrieval/i], ['Agentic AI', /agentic|ai agents?|multi-agent|langgraph/i],\n      ['Computer Vision', /computer vision|\\bcv\\b|image|yolo|opencv/i], ['NLP', /\\bnlp\\b|natural language|bert/i], ['MLOps', /mlops|mlflow|kubeflow/i], ['Data Science', /data scien/i], ['Deep Learning', /deep learning|pytorch|tensorflow|keras/i]],\n    std: { 'AI/ML Engineer': 'Machine Learning Engineer', 'Deep Learning Engineer': 'Machine Learning Engineer', 'GenAI Engineer': 'Generative AI / LLM Engineer', 'LLM Engineer': 'Generative AI / LLM Engineer', 'Applied Scientist': 'Applied / Research Scientist' } },\n  Salesforce: { label: 'Salesforce', tab: 'Salesforce', domainKey: 'salesforce_experience_years', modKey: 'modules',\n    titles: ['Salesforce Developer','Salesforce Administrator','Salesforce Architect','Salesforce Consultant','Salesforce Technical Lead','Salesforce Business Analyst','Salesforce CPQ','Salesforce Marketing Cloud','Salesforce Service Cloud','Salesforce Lightning Developer','Salesforce QA','Salesforce Integration Developer'],\n    rx: /salesforce|\\bsfdc\\b|\\bapex\\b|lightning web|\\blwc\\b|\\bcpq\\b|marketing cloud|service cloud|sales cloud|vlocity|omnistudio|agentforce/i,\n    reject: /recruit|talent acquisition|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales (executive|representative|associate|officer)\\b|inside sales/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'], [/lead|manager/i, 'Lead'], [/./, 'Developer']],\n    mods: [['Sales Cloud', /sales cloud/i], ['Service Cloud', /service cloud/i], ['Marketing Cloud', /marketing cloud|pardot|account engagement/i], ['Experience Cloud', /experience cloud|community cloud/i],\n      ['CPQ / Revenue', /\\bcpq\\b|revenue cloud|billing/i], ['Apex', /\\bapex\\b/i], ['LWC', /\\blwc\\b|lightning web/i], ['Flows', /\\bflows?\\b|process builder/i], ['Integrations', /integration|mulesoft|rest api/i],\n      ['Field Service', /field service/i], ['Data Cloud', /data cloud|\\bcdp\\b/i], ['Analytics', /crm analytics|tableau|einstein analytics/i], ['Commerce', /b2b commerce|b2c commerce|commerce cloud/i], ['Industries', /health cloud|financial services cloud|vlocity|omnistudio/i], ['Agentforce', /agentforce|einstein/i]],\n    std: { 'Salesforce Lightning Developer': 'Salesforce Developer', 'Salesforce Integration Developer': 'Salesforce Developer', 'Salesforce CPQ': 'Salesforce Consultant', 'Salesforce Marketing Cloud': 'Salesforce Consultant', 'Salesforce Service Cloud': 'Salesforce Consultant', 'Salesforce QA': 'Salesforce Tester' } },\n  Workday: { label: 'Workday', tab: 'Workday', domainKey: 'workday_experience_years', modKey: 'modules',\n    titles: ['Workday HCM Consultant','Workday Integration Developer','Workday Consultant','Workday Analyst','Workday Technical Consultant','Workday Financials Consultant','Workday Payroll Consultant','Workday Report Writer','Workday Architect','Workday Administrator','Workday Developer','Workday Business Analyst'],\n    rx: /workday/i,\n    reject: /\\brecruiter\\b|talent acquisition (specialist|partner|lead)|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales\\b/i,\n    roles: [[/integration|studio|\\beib\\b|developer/i, 'Integration'], [/architect/i, 'Architect'], [/report|prism/i, 'Reporting'], [/financ|accounting/i, 'Financials'], [/payroll/i, 'Payroll'], [/admin|hris/i, 'Administrator'], [/analyst/i, 'Analyst'], [/lead|manager/i, 'Lead'], [/./, 'Consultant']],\n    mods: [['Core HCM', /\\bhcm\\b|core hr/i], ['Payroll', /payroll/i], ['Absence/Time', /absence|time tracking/i], ['Benefits', /benefits/i], ['Compensation', /compensation|advanced comp/i],\n      ['Recruiting', /recruiting/i], ['Talent/Learning', /talent management|performance|learning/i], ['Financials', /financials?|accounting|procurement|expenses/i],\n      ['Integrations', /integration|\\beib\\b|studio|core connector|\\bpeci\\b|\\bpicof\\b/i], ['Reporting', /report|prism|dashboards?/i], ['Security', /security/i], ['Adaptive Planning', /adaptive/i], ['Student / Grants', /workday student|grants management/i], ['Extend', /workday extend/i]],\n    std: { 'Workday Technical Consultant': 'Workday Integration Developer', 'Workday Developer': 'Workday Integration Developer', 'Workday Report Writer': 'Workday Reporting Analyst' } },\n};\nconst TAB_POOL = Object.fromEntries(Object.values(POOLS).map(p => [p.tab, p]));\n// ===== Website par \"Add option -> Pool\" se bane pools (MongoDB talent_app.settings -> custom_pools). n8n me kuch badalna nahi padta =====\n// Sab added pools ek hi sheet tab \"Custom\" me jaate hain (pool column ke saath), MongoDB talent_app.candidates_custom me.\nconst esc = x => String(x).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&').replace(/\\s+/g, '\\\\s*');\nlet CUSTOM_POOLS = [], CUSTOM_ROLES = [];\ntry {\n  const doc = $('Read custom pools').all().map(i => i.json).find(d => d && (Array.isArray(d.custom_pools) || Array.isArray(d.custom_roles))) || {};\n  CUSTOM_POOLS = (doc.custom_pools || []).filter(c => c && c.name);\n  // website ke roles: {name, pool} (pool khaali = sab pools). Purane text wale bhi chalte hain\n  CUSTOM_ROLES = (doc.custom_roles || []).map(r => typeof r === 'string' ? { name: r, pool: '' } : r).filter(r => r && r.name);\n} catch (e) { CUSTOM_POOLS = []; CUSTOM_ROLES = []; }\nfor (const c of CUSTOM_POOLS) {\n  if (POOLS[c.name]) continue;\n  const kw = (c.keywords && c.keywords.length ? c.keywords : [c.name]).map(esc);\n  const titles = (c.titles && c.titles.length ? c.titles : [c.name]).slice(0, 15);\n  POOLS[c.name] = {\n    label: c.name, tab: 'Custom', custom: true, scrape: c.scrape !== false, domainKey: 'domain_experience_years', modKey: 'modules',\n    titles, rx: new RegExp(`(^|[^a-z0-9])(${kw.join('|')})([^a-z0-9]|$)`, 'i'),\n    reject: /\\brecruiter\\b|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|business development|account (manager|executive)|\\bsales (executive|representative|associate|officer|manager)\\b|inside sales/i,\n    roles: [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'],\n      [/analyst/i, 'Analyst'], [/lead|manager|head/i, 'Lead'], [/engineer/i, 'Engineer'], [/./, 'Developer']],\n    mods: (c.modules || []).map(m => [m, new RegExp(esc(m), 'i')]),\n    std: {},\n  };\n}\n// website par bane roles sabse pehle check hote hain (us pool ke, ya sab pools ke): \"Data Engineer\" title -> role \"Data Engineer\"\nfor (const P of Object.values(POOLS)) {\n  const mine = CUSTOM_ROLES.filter(r => !r.pool || r.pool === P.label).map(r => [new RegExp(esc(r.name), 'i'), r.name]);\n  if (mine.length) P.roles = [...mine, ...P.roles];\n}\n// pool ka naam row se (Custom tab) ya tab se (4 purane)\nconst poolOf = (tab, row) => tab === 'Custom' ? POOLS[row && row.pool] : TAB_POOL[tab];\n\n// ===== Location: city -> [city, state, country]. India ke saath duniya bhar =====\nconst IN = (c, s) => [c, s, 'India'];\nconst GEO = {\n  bengaluru: IN('Bengaluru','Karnataka'), bangalore: IN('Bengaluru','Karnataka'), mysuru: IN('Mysuru','Karnataka'), mysore: IN('Mysuru','Karnataka'),\n  hyderabad: IN('Hyderabad','Telangana'), secunderabad: IN('Hyderabad','Telangana'), pune: IN('Pune','Maharashtra'), mumbai: IN('Mumbai','Maharashtra'),\n  'navi mumbai': IN('Navi Mumbai','Maharashtra'), thane: IN('Thane','Maharashtra'), nagpur: IN('Nagpur','Maharashtra'), pimpri: IN('Pune','Maharashtra'),\n  chennai: IN('Chennai','Tamil Nadu'), coimbatore: IN('Coimbatore','Tamil Nadu'), noida: IN('Noida','Uttar Pradesh'), 'greater noida': IN('Greater Noida','Uttar Pradesh'),\n  lucknow: IN('Lucknow','Uttar Pradesh'), gurugram: IN('Gurugram','Haryana'), gurgaon: IN('Gurugram','Haryana'), delhi: IN('Delhi','Delhi'), 'new delhi': IN('Delhi','Delhi'),\n  kolkata: IN('Kolkata','West Bengal'), ahmedabad: IN('Ahmedabad','Gujarat'), vadodara: IN('Vadodara','Gujarat'), kochi: IN('Kochi','Kerala'), cochin: IN('Kochi','Kerala'),\n  thiruvananthapuram: IN('Thiruvananthapuram','Kerala'), trivandrum: IN('Thiruvananthapuram','Kerala'), indore: IN('Indore','Madhya Pradesh'), bhopal: IN('Bhopal','Madhya Pradesh'),\n  jaipur: IN('Jaipur','Rajasthan'), chandigarh: IN('Chandigarh','Chandigarh'), mohali: IN('Mohali','Punjab'), bhubaneswar: IN('Bhubaneswar','Odisha'),\n  'new york': ['New York','New York','United States'], 'new jersey': ['New Jersey','New Jersey','United States'], 'jersey city': ['Jersey City','New Jersey','United States'],\n  'san francisco': ['San Francisco Bay Area','California','United States'], 'bay area': ['San Francisco Bay Area','California','United States'], 'san jose': ['San Jose','California','United States'],\n  'los angeles': ['Los Angeles','California','United States'], 'san diego': ['San Diego','California','United States'], seattle: ['Seattle','Washington','United States'],\n  dallas: ['Dallas','Texas','United States'], houston: ['Houston','Texas','United States'], austin: ['Austin','Texas','United States'], chicago: ['Chicago','Illinois','United States'],\n  atlanta: ['Atlanta','Georgia','United States'], boston: ['Boston','Massachusetts','United States'], charlotte: ['Charlotte','North Carolina','United States'],\n  phoenix: ['Phoenix','Arizona','United States'], denver: ['Denver','Colorado','United States'],\n  toronto: ['Toronto','Ontario','Canada'], vancouver: ['Vancouver','British Columbia','Canada'], montreal: ['Montreal','Quebec','Canada'], calgary: ['Calgary','Alberta','Canada'],\n  london: ['London','England','United Kingdom'], manchester: ['Manchester','England','United Kingdom'], birmingham: ['Birmingham','England','United Kingdom'], edinburgh: ['Edinburgh','Scotland','United Kingdom'],\n  dublin: ['Dublin','','Ireland'], amsterdam: ['Amsterdam','','Netherlands'], berlin: ['Berlin','','Germany'], munich: ['Munich','','Germany'], frankfurt: ['Frankfurt','','Germany'],\n  paris: ['Paris','','France'], zurich: ['Zurich','','Switzerland'], sydney: ['Sydney','New South Wales','Australia'], melbourne: ['Melbourne','Victoria','Australia'],\n  brisbane: ['Brisbane','Queensland','Australia'], auckland: ['Auckland','','New Zealand'], singapore: ['Singapore','','Singapore'], dubai: ['Dubai','','United Arab Emirates'],\n  'abu dhabi': ['Abu Dhabi','','United Arab Emirates'], riyadh: ['Riyadh','','Saudi Arabia'], doha: ['Doha','','Qatar'], 'kuala lumpur': ['Kuala Lumpur','','Malaysia'],\n};\nconst COUNTRY = [[/\\bindia\\b/i, 'India'], [/united states|\\busa\\b|\\bu\\.s\\.|, (ca|ny|tx|wa|nj|ga|il|ma|nc|az|co|va|fl)\\b/i, 'United States'], [/united kingdom|\\buk\\b|england|scotland/i, 'United Kingdom'],\n  [/canada/i, 'Canada'], [/australia/i, 'Australia'], [/germany|deutschland/i, 'Germany'], [/netherlands/i, 'Netherlands'], [/ireland/i, 'Ireland'], [/united arab emirates|\\buae\\b/i, 'United Arab Emirates'],\n  [/singapore/i, 'Singapore'], [/new zealand/i, 'New Zealand'], [/france/i, 'France'], [/switzerland/i, 'Switzerland'], [/saudi/i, 'Saudi Arabia'], [/qatar/i, 'Qatar'], [/malaysia/i, 'Malaysia'],\n  [/poland/i, 'Poland'], [/spain/i, 'Spain'], [/philippines/i, 'Philippines'], [/japan/i, 'Japan'], [/mexico/i, 'Mexico'], [/brazil/i, 'Brazil'], [/sweden/i, 'Sweden']];\nconst WORLD = ['Afghanistan','Albania','Algeria','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Belarus','Belgium','Bhutan','Bolivia',\n  'Bosnia and Herzegovina','Botswana','Brazil','Bulgaria','Cambodia','Cameroon','Canada','Chile','China','Colombia','Costa Rica','Croatia','Cyprus','Czechia','Czech Republic',\n  'Denmark','Dominican Republic','Ecuador','Egypt','Estonia','Ethiopia','Finland','France','Georgia','Germany','Ghana','Greece','Guatemala','Hong Kong','Hungary','Iceland',\n  'India','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kuwait','Latvia','Lebanon','Lithuania','Luxembourg','Malaysia',\n  'Maldives','Malta','Mauritius','Mexico','Moldova','Mongolia','Morocco','Myanmar','Nepal','Netherlands','New Zealand','Nigeria','North Macedonia','Norway','Oman','Pakistan',\n  'Panama','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rwanda','Saudi Arabia','Senegal','Serbia','Singapore','Slovakia','Slovenia',\n  'South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Taiwan','Tanzania','Thailand','Tunisia','Turkey','T\u00fcrkiye','Uganda','Ukraine','United Arab Emirates',\n  'United Kingdom','United States','Uruguay','Uzbekistan','Venezuela','Vietnam','Zambia','Zimbabwe'];\nconst GEO_KEYS = Object.keys(GEO).sort((a, b) => b.length - a.length);\n// text se [city, state, country] ya null\nfunction findPlace(text) {\n  const t = String(text || '').toLowerCase();\n  for (const c of GEO_KEYS) if (new RegExp(`\\\\b${c}\\\\b`).test(t)) return GEO[c];\n  // koi bhi desh (Italy, Spain, Kenya...): LinkedIn \"Milan, Lombardy, Italy\" -> ['Milan', 'Lombardy', 'Italy']\n  const parts = String(text || '').split(',').map(x => x.trim()).filter(Boolean);\n  const last = (parts[parts.length - 1] || '').toLowerCase().replace(/^the /, '');\n  const co = COUNTRY.find(([rx]) => rx.test(t));\n  const name = co ? co[1] : WORLD.find(w => w.toLowerCase() === last);\n  if (!name) return null;\n  let city = parts.length > 1 ? parts[0].replace(/\\s*(metropolitan|metro) (area|region)$/i, '').replace(/^greater\\s+/i, '').replace(/\\s+area$/i, '') : '';\n  if (city.toLowerCase() === name.toLowerCase() || city.length > 40) city = '';\n  return [city, city && parts.length > 2 ? parts[1] : '', name];\n}\n\n// GitHub + Hugging Face + arXiv -> \"Leads\" tab ki rows (naye log; LinkedIn link mila to wo bhi)\nconst MAX_NEW = 300;           // ek run me zyada se zyada naye leads\nconst MAX_ARXIV_AUTHORS = 4;   // har paper se pehle itne authors\nconst state = $getWorkflowStaticData('global');\nstate.done = state.done || {};\nconst now = new Date(Date.now() + 5.5 * 3600e3), stamp = now.toISOString().slice(0, 16).replace('T', ' ');\nconst leadsRows = $('Read Leads').all().map(i => i.json);\nconst known = new Set(leadsRows.map(r => String(r.lead_id || '').toLowerCase()).filter(Boolean));\nconst knownLi = new Set(leadsRows.map(r => String(r.linkedin_url || '').toLowerCase()).filter(Boolean));\nconst liNorm = u => { const m = String(u || '').match(/linkedin\\.com\\/in\\/([^/?#\\s]+)/i); return m ? `https://www.linkedin.com/in/${decodeURIComponent(m[1]).toLowerCase()}` : ''; };\n// asli naam: kam se kam 2 shabd, pehla aur aakhri 2+ akshar (J. Smith / bot42 nahi)\nconst realName = n => { const s = String(n || '').replace(/\\s+/g, ' ').trim(); const w = s.split(' ').map(x => x.replace(/[^\\p{L}]/gu, ''));\n  return w.length >= 2 && w[0].length >= 2 && w[w.length - 1].length >= 2 && !/\\b(team|lab|labs|inc|ltd|official|bot|org|community)\\b/i.test(s) ? s : ''; };\nconst slug = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^\\w\\s-]/g, '').replace(/\\s+/g, '-');\nconst countryOf = (loc, hint) => { const p = findPlace(loc) || findPlace(hint); return p ? p : ['', '', '']; };\nconst leads = [], stat = { github: 0, hf: 0, arxiv: 0, withLinkedIn: 0, dupe: 0, calls: 0, failed: 0 }, byPool = {};\nfunction add(l) {\n  const id = l.lead_id.toLowerCase();\n  if (known.has(id) || (l.linkedin_url && knownLi.has(l.linkedin_url))) { stat.dupe++; return; }\n  if (leads.length >= MAX_NEW) return;\n  known.add(id); if (l.linkedin_url) { knownLi.add(l.linkedin_url); stat.withLinkedIn++; }\n  stat[l._src]++; byPool[l.pool] = (byPool[l.pool] || 0) + 1;\n  const { _src, ...row } = l;\n  leads.push({ found_at: stamp, status: 'New', matched_at: '', match_note: '', tries: 0, ...row });\n}\n// ---- GitHub ----\nconst ghCalls = $('GitHub calls').all().map(i => i.json), ghResp = $('GitHub search').all().map(i => i.json);\nghCalls.forEach((c, i) => {\n  if (c.skip) return;\n  stat.calls++;\n  const body = (ghResp[i] || {}).body || {};\n  const s = body.data && body.data.search;\n  if (!s) { stat.failed++; return; }\n  state.done[c.key] = { n: c.page, next: s.pageInfo && s.pageInfo.hasNextPage ? s.pageInfo.endCursor : null, at: stamp, total: s.userCount };\n  for (const u of s.nodes || []) {\n    if (!u || !u.login) continue;\n    const name = realName(u.name);\n    if (!name) continue;\n    const li = liNorm(((u.socialAccounts && u.socialAccounts.nodes) || []).map(a => a.url).find(x => /linkedin\\.com\\/in\\//i.test(x)) || u.websiteUrl);\n    const [city, , country] = countryOf(u.location, c.loc);\n    const repos = ((u.topRepositories && u.topRepositories.nodes) || []).filter(Boolean).slice(0, 3)\n      .map(r => `${r.name}${r.primaryLanguage ? ` (${r.primaryLanguage.name}` : ' ('}${r.stargazerCount ? `, \u2605${r.stargazerCount}` : ''})`).join(', ');\n    add({ _src: 'github', lead_id: `gh:${u.login}`, source: 'GitHub', pool: c.pool, name,\n      headline: String(u.bio || '').replace(/\\s+/g, ' ').trim().slice(0, 200), company: String(u.company || '').replace(/^@/, '').trim().slice(0, 80),\n      location: city || String(u.location || '').slice(0, 60), country, evidence: `GitHub: ${(u.followers && u.followers.totalCount) || 0} followers${repos ? `; repos: ${repos}` : ''}`,\n      profile_url: u.url || `https://github.com/${u.login}`, email: u.email || '', linkedin_url: li, search: `github: \"${c.term}\" ${c.loc}` });\n  }\n});\n// ---- Hugging Face ----\nfor (const c of $('Hugging Face calls').all().map(i => i.json)) if (!c.skip) { stat.calls++; state.done[c.key] = { n: c.page, next: null, at: stamp }; }\nconst hfA = $('Hugging Face authors').all().map(i => i.json), hfR = $('Hugging Face profiles').all().map(i => i.json);\nhfA.forEach((a, i) => {\n  if (a.skip) return;\n  const r = hfR[i] || {}, b = r.body || {};\n  if (Number(r.statusCode) !== 200 || b.type !== 'user') return;\n  const name = realName(b.fullname);\n  if (!name) return;\n  const org = (b.orgs || []).map(o => o.fullname || o.name).find(Boolean) || '';\n  add({ _src: 'hf', lead_id: `hf:${a.author}`, source: 'Hugging Face', pool: a.pool, name, headline: String(b.details || '').replace(/\\s+/g, ' ').trim().slice(0, 200),\n    company: String(org).slice(0, 80), location: '', country: '',\n    evidence: `Hugging Face: ${b.numModels || 0} models, ${b.numPapers || 0} papers, ${b.numFollowers || 0} followers`,\n    profile_url: `https://huggingface.co/${a.author}`, email: '', linkedin_url: '', search: `huggingface: \"${a.term}\"` });\n});\n// ---- arXiv (Atom XML) ----\nconst axCalls = $('arXiv calls').all().map(i => i.json), axResp = $('arXiv search').all().map(i => i.json);\nconst tag = (x, t) => { const m = String(x).match(new RegExp(`<${t}[^>]*>([\\\\s\\\\S]*?)</${t}>`)); return m ? m[1].replace(/\\s+/g, ' ').trim() : ''; };\naxCalls.forEach((c, i) => {\n  if (c.skip) return;\n  stat.calls++;\n  const xml = String((axResp[i] || {}).body || (axResp[i] || {}).data || '');\n  const entries = xml.split('<entry>').slice(1);\n  if (!xml.includes('<feed')) { stat.failed++; return; }\n  state.done[c.key] = { n: c.page, next: entries.length >= 25 ? 'more' : null, at: stamp };\n  for (const e of entries) {\n    const title = tag(e, 'title'), date = tag(e, 'published').slice(0, 7), link = tag(e, 'id');\n    const authors = e.split('<author>').slice(1).slice(0, MAX_ARXIV_AUTHORS);\n    for (const a of authors) {\n      const name = realName(tag(a, 'name'));\n      if (!name) continue;\n      const aff = tag(a, 'arxiv:affiliation');\n      add({ _src: 'arxiv', lead_id: `ax:${slug(name)}`, source: 'arXiv', pool: c.pool, name, headline: `Author: ${title}`.slice(0, 200),\n        company: aff.slice(0, 80), location: '', country: '', evidence: `Paper (${date}): ${title}`.slice(0, 250),\n        profile_url: link, email: '', linkedin_url: '', search: `arxiv: \"${c.term}\"` });\n    }\n  }\n});\nconst stats = { stamp, ...stat, added: leads.length, byPool };\nif (!leads.length) return [{ json: { _kind: 'none', _stats: stats } }];\nreturn leads.map((l, i) => ({ json: i === 0 ? { _kind: 'lead', _stats: stats, ...l } : { _kind: 'lead', ...l } }));\n"
+      },
+      "id": "0d2308b2-0030-40d1-8b26-c0b4c0191f07",
+      "name": "Build leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf naye leads (helper fields hata ke)\nreturn $input.all().filter(i => i.json._kind === 'lead').map(i => { const { _kind, _stats, ...row } = i.json; return { json: row }; });\n"
+      },
+      "id": "59074fdc-e001-49f7-afa6-81427309bd1c",
+      "name": "Only new leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1658721717",
+          "mode": "id",
+          "cachedResultName": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "5cc0e85d-4c18-4640-8acb-c5bec902c74f",
+      "name": "Add to Leads tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// runs tab (sheet) + MongoDB runs: 1 row per Free sources run\nconst s = $input.first().json._stats;\nconst pools = Object.entries(s.byPool || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k}`).join(' + ') || 'none';\nconst notes = `Free sources: ${s.added} new leads (GitHub ${s.github}, Hugging Face ${s.hf}, arXiv ${s.arxiv}); ${s.withLinkedIn} already have a LinkedIn link. ` +\n  `By pool: ${pools}. Already known: ${s.dupe}. API calls: ${s.calls}${s.failed ? `, failed ${s.failed}` : ''}. Cost $0.`;\nreturn [{ json: {\n  sheet: { 'Run date': s.stamp, 'Flow': 'n8n (free sources)', 'Queries': s.calls, 'Google results': '', 'LinkedIn profiles found': s.added,\n    'Rejected (not India / wrong title / duplicate)': s.dupe, 'New rows added': `${s.added} leads`, 'Apify cost ($)': 0, 'Notes': notes },\n  mongo: { run_at: s.stamp, flow: 'n8n (free sources)', queries: s.calls, found: s.added + s.dupe, rejected: s.dupe, added: s.added, cost: 0,\n    leads: s.added, leads_linkedin: s.withLinkedIn, notes, ...(s.failed ? { error: `${s.failed} API calls failed` } : {}) },\n} }];\n"
+      },
+      "id": "15e3bba1-68ff-45b8-b402-b3fd4c447382",
+      "name": "Build run log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        220
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.sheet }];\n"
+      },
+      "id": "ef746fbe-041e-4eea-976c-84ee3a2ed4ad",
+      "name": "Runs tab row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "63406601",
+          "mode": "id",
+          "cachedResultName": "runs"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "394eb26a-582e-4920-90dd-106863e854b8",
+      "name": "Log to runs tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3360,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.mongo }];\n"
+      },
+      "id": "e77a62e2-8fdd-4b47-b7c2-5ab2792435b6",
+      "name": "Mongo run row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "runs",
+        "fields": "run_at,flow,queries,google_results,found,rejected,added,cost,notes,leads,leads_linkedin,error",
+        "options": {}
+      },
+      "id": "22bbb9f5-1da8-4a5a-a6e6-9667a5a24dfa",
+      "name": "Mongo run log",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Free sources: GitHub + Hugging Face + arXiv -> Leads tab (FREE)\nHar 6 ghante (2:25, 8:25, 14:25, 20:25).\nPool ke naam/keywords se source apne aap: developer/data/AI pools -> GitHub, AI pools -> Hugging Face + arXiv. Naye pool ke liye kuch badalna nahi.\nLeads tab me jaate hain (status New). Scraping workflow har ghante 10 leads ka LinkedIn dhoondhta hai; jinka LinkedIn link GitHub par hai wo seedhe candidate.\nCredential: 'GitHub search' node -> Header Auth: Name = Authorization, Value = Bearer <GitHub token>.\nSettings: 'Plan source calls' me GH_PER_RUN, HF_PER_RUN, AX_PER_RUN.",
+        "width": 640,
+        "height": 280
+      },
+      "id": "6d832cb7-8884-48b4-908a-1a804669928e",
+      "name": "Note 66eb",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -440
+      ]
+    }
+  ],
+  "connections": {
+    "Every 6 hours (2:25, 8:25, 14:25, 20:25)": {
+      "main": [
+        [
+          {
+            "node": "Read custom pools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read custom pools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read custom pools": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Plan source calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan source calls": {
+      "main": [
+        [
+          {
+            "node": "GitHub calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub calls": {
+      "main": [
+        [
+          {
+            "node": "GitHub search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub search": {
+      "main": [
+        [
+          {
+            "node": "Hugging Face calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hugging Face calls": {
+      "main": [
+        [
+          {
+            "node": "Hugging Face models search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hugging Face models search": {
+      "main": [
+        [
+          {
+            "node": "Hugging Face authors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hugging Face authors": {
+      "main": [
+        [
+          {
+            "node": "Hugging Face profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hugging Face profiles": {
+      "main": [
+        [
+          {
+            "node": "arXiv calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arXiv calls": {
+      "main": [
+        [
+          {
+            "node": "arXiv search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arXiv search": {
+      "main": [
+        [
+          {
+            "node": "Build leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build leads": {
+      "main": [
+        [
+          {
+            "node": "Only new leads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only new leads": {
+      "main": [
+        [
+          {
+            "node": "Add to Leads tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run log": {
+      "main": [
+        [
+          {
+            "node": "Runs tab row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mongo run row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runs tab row": {
+      "main": [
+        [
+          {
+            "node": "Log to runs tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongo run row": {
+      "main": [
+        [
+          {
+            "node": "Mongo run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "tags": []
+}

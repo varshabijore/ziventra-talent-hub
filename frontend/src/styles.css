@@ -1046,3 +1046,7 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
   .dash2 .r1 .span2>div:first-of-type{display:block}
   .dash2 .r3>.panel{min-height:0}
 }
+/* 4 job cards (Scraping, Enrichment, Free sources, Refresh) */
+.jobs:not(.two){grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1250px){.jobs:not(.two){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.jobs:not(.two){grid-template-columns:minmax(0,1fr)}}
