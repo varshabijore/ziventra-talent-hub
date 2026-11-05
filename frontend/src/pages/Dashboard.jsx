@@ -1,4 +1,4 @@
-import { POOLS, poolColor } from "../pools.js";
+import { topPools } from "../pools.js";
 import SmartSearch from "../components/SmartSearch.jsx";
 import { Avatar, BarChart, Donut, ErrorBox, HBars, Kpi, Loading, fmt, tone, when } from "../components/ui.jsx";
 import { useCached } from "../context/DataContext.jsx";
@@ -11,8 +11,11 @@ export default function Dashboard({ user }) {
   if (loading && !d) return <Loading />;
   if (error) return <ErrorBox error={error} retry={reload} />;
   const ct = d.contacts || { phones: 0, emails: 0, both: 0, list: [] };
-  const extra = Object.keys(d.pools || {}).filter((n) => !POOLS.some((p) => p.name === n) && d.pools[n] > 0).map((n, i) => ({ name: n, color: poolColor(n, i) }));
-  const shown = [...POOLS.filter((p) => (d.pools?.[p.name] || 0) > 0 || ["ServiceNow", "AI/ML"].includes(p.name)), ...extra];
+  const tp = topPools(d.pools || {}, 7);
+  const shown = tp.shown;
+  const other = shown.find((p) => p.other);
+  // per-day rows: the small pools are added up into the "N more pools" bar
+  const daily = d.daily.map((r) => ({ ...r, label: short(r.date), ...(other ? { [other.name]: other.other.reduce((a, n) => a + (r[n] || 0), 0) } : {}) }));
   return (
     <div className="dash">
       <div className="top"><div><h1>{greet()}, {user.name.split(" ")[0]}</h1>
@@ -26,10 +29,13 @@ export default function Dashboard({ user }) {
       </section>
       <div className="grid3 drow">
         <div className="panel span2"><h2>New candidates per day</h2><p className="sub">Last 30 days, by the date automation first found them</p>
-          <BarChart rows={d.daily.map((r) => ({ ...r, label: short(r.date) }))} width={980} height={typeof innerHeight !== "undefined" && innerHeight > 950 && innerWidth > 1100 ? 300 : 170} every={5}
+          <BarChart rows={daily} width={980} height={typeof innerHeight !== "undefined" && innerHeight > 950 && innerWidth > 1100 ? 300 : 170} every={5}
             series={shown.map((p) => ({ key: p.name, name: p.name, color: p.color }))} /></div>
-        <div className="panel"><h2>Pool split</h2><p className="sub">{shown.map((p) => p.name).join(" vs ")}</p>
-          <Donut label="candidates" parts={shown.map((p) => ({ label: p.name, value: d.pools[p.name] || 0, color: p.color }))} /></div>
+        <div className="panel"><h2>Pool split</h2><p className="sub">{tp.count} pools · biggest first</p>
+          <Donut label="candidates" parts={shown.map((p) => ({ label: p.name, value: p.value, color: p.color }))} />
+          {other && <details className="allpools"><summary>See all {tp.count} pools</summary>
+            <div className="aplist">{tp.all.map(([n, v]) => <a key={n} href={"/candidates?pool=" + encodeURIComponent(n)}><span>{n}</span><b className="mono">{fmt(v)}</b></a>)}</div>
+          </details>}</div>
       </div>
       <div className="grid4 drow">
         <div className="panel">

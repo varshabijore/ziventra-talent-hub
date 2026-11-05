@@ -308,6 +308,22 @@ def _has(v):
     return bool(str(v or "").strip()) and str(v).strip().lower() not in ("not found", "requested", "-", "none")
 
 
+def _apollo_phone(v):
+    """Apollo phone for the Contacts tab. If Mongo still says "requested" but the sheet (synced into `phone`)
+    already has the number Apollo sent by webhook, show that number instead of "arriving"."""
+    ap = str(v.get("apollo_phone") or "")
+    ph, st = str(v.get("phone") or "").strip(), str(v.get("phone_status") or "")
+    if ap in ("", "requested") and ph[:1] in "+0123456789" and ph and "apollo" in st.lower():
+        return ph
+    if ap == "requested" and "apollo" in st.lower() and "not found" in st.lower():
+        return "not found"
+    # Apollo sends the number within a few minutes; still "requested" after 2 hours means it had none
+    at = str(v.get("apollo_checked_at") or "")[:16]
+    if ap == "requested" and at and at < (_now() - dt.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M"):
+        return "not found"
+    return ap
+
+
 def contacts(runs_raw, people, start, end):
     """The Contacts tab: Apollo (phone) + Treg (email) runs and what they found per candidate."""
     now = _now()
@@ -325,7 +341,7 @@ def contacts(runs_raw, people, start, end):
             continue
         rows.append({"id": v["id"], "name": v.get("name"), "pool": v.get("pool"), "title": v.get("current_title") or "",
                      "checked_at": max(a_at if a_in else "", t_at if t_in else ""),
-                     "apollo": {"status": v.get("apollo_status"), "phone": v.get("apollo_phone") or "", "email": v.get("apollo_email") or "",
+                     "apollo": {"status": v.get("apollo_status"), "phone": _apollo_phone(v), "email": v.get("apollo_email") or "",
                                 "email_status": v.get("apollo_email_status") or "", "personal": v.get("apollo_personal_email") or "", "at": a_at} if a_in else None,
                      "treg": {"status": v.get("treg_status"), "work": v.get("treg_work_email") or "", "verified": v.get("treg_work_verified") == "yes",
                               "personal": v.get("treg_personal_email") or "", "by": v.get("treg_served_by") or "", "cost": v.get("treg_cost") or 0, "at": t_at} if t_in else None,

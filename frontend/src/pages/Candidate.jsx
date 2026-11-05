@@ -45,7 +45,10 @@ function ApolloBox({ c }) {
   const rows = [
     ["Work email", c.apollo_email ? `${c.apollo_email} (${c.apollo_email_status === "verified" ? "verified" : c.apollo_email_status || "not verified"})` : "not found"],
     ["Personal email", c.apollo_personal_email || "not found"],
-    ["Mobile", c.apollo_phone === "requested" ? "requested, arriving soon" : c.apollo_phone || "not found"],
+    ["Mobile", c.apollo_phone === "requested"
+      ? (/^\+?\d/.test(c.phone || "") && /apollo/i.test(c.phone_status || "") ? c.phone   // number came by webhook, saved in the sheet
+        : (c.apollo_checked_at || "") < new Date(Date.now() + 5.5 * 3600e3 - 2 * 3600e3).toISOString().slice(0, 16).replace("T", " ") ? "not found" : "requested, arriving soon")
+      : c.apollo_phone || "not found"],
     ["Title / company", [c.apollo_title, c.apollo_company].filter(Boolean).join(" at ") || "-"],
   ];
   return (

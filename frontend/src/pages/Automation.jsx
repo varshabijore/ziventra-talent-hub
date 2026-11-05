@@ -16,20 +16,32 @@ const poolParts = (x) => {
 };
 // short label for the small KPI card: "Power Apps Developer" -> "Power Apps", ServiceNow -> "SN"
 const SHORT = { ServiceNow: "SN", "AI/ML": "AI/ML", Salesforce: "SF", Workday: "WD" };
-const shortPool = (p) => SHORT[p] || p.replace(/\s+(developer|architect|engineer|consultant|specialist|analyst|administrator)s?$/i, "").slice(0, 14);
+const shortPool = (p, max = 18) => {
+  if (SHORT[p]) return SHORT[p];
+  const s = p.replace(/\s+(developer|architect|engineer|consultant|specialist|analyst|administrator)s?$/i, "");
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
+};
 function PoolSplit({ x }) {
   const parts = poolParts(x);
   const total = parts.reduce((a, [, n]) => a + n, 0);
   if (!total) return <>no new candidates</>;
   const label = parts.map(([p, n]) => `${n} ${p}`).join(", ");
+  const top = parts.slice(0, 3), more = parts.length - top.length;
   return (
     <span className="psplit" title={label} aria-label={label}>
       <span className="pbar">{parts.map(([p, n, c]) => <i key={p} style={{ width: (100 * n) / total + "%", background: c }} />)}</span>
-      <span className="pnums">{parts.map(([p, n, c]) => <span key={p} title={p}><b style={{ background: c }} />{shortPool(p)} {fmt(n)}</span>)}</span>
+      <span className="pnums">{top.map(([p, n, c]) => <span key={p} title={`${n} ${p}`}><b style={{ background: c }} />{shortPool(p, 12)} {fmt(n)}</span>)}
+        {more > 0 && <span className="muted" title={parts.slice(3).map(([p, n]) => `${n} ${p}`).join(", ")}>+{more} more pools</span>}</span>
     </span>
   );
 }
-const split = (x, sep = ", ") => poolParts(x).map(([p, n]) => `${fmt(n)} ${p}`).join(sep) || "none";
+// "120 SAP Ariba Buying & Invoicing, 14 united states and 18 more pools"
+const split = (x, sep = ", ", max = 3) => {
+  const parts = poolParts(x);
+  if (!parts.length) return "none";
+  const head = parts.slice(0, max).map(([p, n]) => `${fmt(n)} ${p}`).join(sep);
+  return parts.length > max ? `${head} and ${parts.length - max} more pools` : head;
+};
 
 const JOB_TONE = { Scraping: "c-brand", Enrichment: "c-sn", Refresh: "c-info", Apollo: "c-warn", Sync: "c-ai" };
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -166,11 +178,14 @@ export default function Automation({ query }) {
                     <td className="mono">{r.found || "-"}</td>
                     <td className="mono"><b>{r.job === "Scraping" ? r.new : r.job === "Enrichment" ? r.enriched : r.job === "Refresh" ? r.checked : r.job === "Apollo" ? r.matched : r.synced || "-"}</b>
                       {r.job === "Apollo" ? <div className="small muted">{r.emails_added} emails</div> : null}
-                      {r.job === "Scraping" && r.new ? <div className="small muted">{poolParts(r).map(([p, n]) => `${n} ${p.length > 14 ? p.split(" ").map((w) => w[0]).join("") : p}`).join(" · ")}</div> : null}
+                      {r.job === "Scraping" && r.new ? <div className="small muted runpools" title={split(r, ", ", 99)}>{(() => {
+                        const parts = poolParts(r);
+                        return <>{parts.slice(0, 3).map(([p, n]) => <span key={p}>{n} {shortPool(p)}</span>)}{parts.length > 3 && <span>+{parts.length - 3} more</span>}</>;
+                      })()}</div> : null}
                       {r.job === "Enrichment" && (r.emails_valid || r.emails_risky) ? <div className="small muted">{r.emails_valid} valid email</div> : null}</td>
                     <td className="mono">{r.rejected || 0}{r.duplicates ? <div className="small muted">{r.duplicates} dup</div> : null}</td>
                     <td className="mono small">{r.job === "Apollo" ? `~${r.credits} cr` : money(r.cost)}</td>
-                    <td className="small">{r.issues.length ? r.issues.map((x, k) => <div key={k} className="iss">⚠ {x}</div>) : <span className="muted">{r.result}</span>}</td>
+                    <td className="small">{r.issues.length ? r.issues.map((x, k) => <div key={k} className="iss">⚠ {x}</div>) : <span className="muted clamp3" title={r.result}>{r.result}</span>}</td>
                   </tr>))}</tbody></table>
             </div>
           ) : <div className="empty small" style={{ padding: "40px 12px" }}>{d.runs.length ? "No runs match this filter." : "No run log in the database yet. Add the run-log node in n8n (or run import_runs.py once to load the past runs from the sheet)."}</div>}

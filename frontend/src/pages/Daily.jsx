@@ -45,15 +45,19 @@ export default function Daily({ query }) {
   if (error) return <ErrorBox error={error} retry={reload} />;
   const s = d.summary;
   const count = { new: s.new, enriched: s.enriched, refreshed: s.refreshed, changed: s.changed };
+  // biggest pools of the day (any pool, also the ones added on the website), e.g. "21 SAP Ariba · 14 united states · +18 more"
+  const newBy = Object.entries((d.lists?.new || []).reduce((a, c) => ({ ...a, [c.pool]: (a[c.pool] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   const sub = {
-    new: [[s.new_sn, "ServiceNow"], [s.new_ai, "AI/ML"], [s.new_sf, "Salesforce"], [s.new_wd, "Workday"]].filter(([n], i) => n || i < 2).map(([n, l]) => `${fmt(n || 0)} ${l}`).join(" + "),
+    new: newBy.length ? newBy.slice(0, 2).map(([p, n]) => `${fmt(n)} ${p}`).join(" · ") + (newBy.length > 2 ? ` · +${newBy.length - 2} more pools` : "") : "no new candidates",
     enriched: "full LinkedIn profile added",
     refreshed: "profiles re-checked",
     changed: "company, title, city…",
   };
   const cost = d.runs.reduce((a, r) => a + (Number(r.cost) || 0), 0);
   const all = d.lists?.[view.id] || [];
-  const poolTabs = [["", `All ${all.length}`], ...[...new Set([...POOL_NAMES, ...all.map((c) => c.pool)])].map((p) => [p, all.filter((c) => c.pool === p).length]).filter(([p, n], i) => n || i < 2).map(([p, n]) => [p, `${p} ${n}`])];
+  const poolTabs = [["", `All ${all.length}`], ...[...new Set([...POOL_NAMES, ...all.map((c) => c.pool)])].map((p) => [p, all.filter((c) => c.pool === p).length]).filter(([p, n], i) => n || i < 2)
+    .sort((a, b) => b[1] - a[1]).map(([p, n]) => [p, `${p} ${n}`])];
+  const manyPools = poolTabs.length > 6;   // 30+ pools: a dropdown instead of a row of buttons
 
   return (
     <>
@@ -78,10 +82,13 @@ export default function Daily({ query }) {
           <div className="lhead">
             <div><h2>{view.title}</h2><p className="sub" style={{ margin: 0 }}>{fmt(all.length)} total · click a row to open the profile</p></div>
             <div className="ltools">
-              <div className="seg" role="group" aria-label="Pool">
-                {poolTabs.map(([k, l]) => (
-                  <button key={k} type="button" aria-pressed={pool === k} onClick={() => setPool(k)}>{l}</button>))}
-              </div>
+              {manyPools
+                ? <select value={pool} onChange={(e) => setPool(e.target.value)} aria-label="Pool" className="poolsel">
+                    {poolTabs.map(([k, l]) => <option key={k} value={k}>{k ? l : `All pools · ${all.length}`}</option>)}</select>
+                : <div className="seg" role="group" aria-label="Pool">
+                    {poolTabs.map(([k, l]) => (
+                      <button key={k} type="button" aria-pressed={pool === k} onClick={() => setPool(k)}>{l}</button>))}
+                  </div>}
               <input type="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search this list" style={{ width: 170 }} />
             </div>
           </div>
