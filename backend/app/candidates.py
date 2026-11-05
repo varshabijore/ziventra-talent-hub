@@ -770,6 +770,38 @@ class Candidates:
                 series[f][v["pool"]] = series[f].get(v["pool"], 0) + 1
         month_ago = days[0]
         by = lambda key, opts: {o: sum(1 for v in views if v[key] == o) for o in opts}
+        # last 14 days: candidates found and profiles enriched per day (one simple trend, no pool colours)
+        last14 = days[-14:]
+        found14 = {d: 0 for d in last14}
+        for v in views:
+            f = str(v.get("first_seen") or "")[:10]
+            if f in found14:
+                found14[f] += 1
+        trend = [{"date": d, "found": found14[d], "enriched": sum(1 for v in views if self._enriched_on(v, d))} for d in last14]
+        # one row per pool: size, growth and how much of it is usable (enriched, email, phone)
+        week = last14[-7]
+        table = {}
+        for v in views:
+            r = table.setdefault(v["pool"], {"pool": v["pool"], "total": 0, "today": 0, "week": 0, "enriched": 0, "email": 0, "phone": 0})
+            f = str(v.get("first_seen") or "")[:10]
+            r["total"] += 1
+            r["today"] += f == t
+            r["week"] += f >= week
+            r["enriched"] += v["data_status"] in ("Enriched", "Refreshed")
+            r["email"] += scoring.has_value("email", v.get("email"))
+            r["phone"] += bool(v.get("phone"))
+        pool_table = sorted(table.values(), key=lambda r: -r["total"])
+        # countries (data now comes from many countries), each with its 3 biggest cities
+        cn = {}
+        for v in views:
+            c = (v.get("country") or "").strip() or "Unknown"
+            x = cn.setdefault(c, {"label": c, "value": 0, "cities": {}})
+            x["value"] += 1
+            city = (v.get("city") or "").strip()
+            if city:
+                x["cities"][city] = x["cities"].get(city, 0) + 1
+        countries = [{"label": x["label"], "value": x["value"], "cities": [k for k, _ in sorted(x["cities"].items(), key=lambda i: -i[1])[:3]]}
+                     for x in sorted(cn.values(), key=lambda x: -x["value"]) if x["label"] != "Unknown"][:8]
         recent = sorted(views, key=lambda v: str(v["updated_at"]), reverse=True)[:8]
         lights = [self.light(v) | {"phone_source": self._phone_source(v), "found_at": str(v.get("apollo_checked_at") or v.get("app_updated_at") or v.get("last_updated") or "")[:16]}
                   for v in views if v.get("phone") or v.get("apollo_phone")]
@@ -786,6 +818,9 @@ class Candidates:
             "daily": list(series.values()),
             "data_status": by("data_status", DATA_STATUS),
             "cities": self._top(views, "city", 7),
+            "trend": trend,
+            "pool_table": pool_table,
+            "countries": countries,
             "experience": {b: sum(1 for v in views if (v.get("experience_bucket") or "Unknown") == b) for b in ("0-2", "2-5", "5-8", "8+", "Unknown")},
             "recent": [self.light(v) for v in recent],
             "contacts": {"phones": len(with_phone),

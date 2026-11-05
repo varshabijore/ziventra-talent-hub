@@ -1,0 +1,78 @@
+{
+  "name": "Error alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "83c8bba4-c74e-4a68-a6c2-98065421135a",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "e5dfe9d8-8e89-4de0-a6ca-0f516a020e3c",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "sendTo": "varsha@ziventra.com",
+        "subject": "=n8n FAILED: {{ $json.workflow.name }}",
+        "emailType": "text",
+        "message": "= Workflow: {{ $json.workflow.name }}      Node: {{ $json.execution.lastNodeExecuted }}      Error: {{ $json.execution.error.message }}      Link: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a807c6cb-89c7-4618-affd-9a45f17abce8",
+      "name": "Send a message",
+      "webhookId": "84cf030b-5e93-4d59-9e1d-08e00afb0b36",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "7qy8Oxobhl6OVsUf",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6819edc5-d285-4eaf-8fe3-778c9e781d28",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8fd2667a3a618d1ad72c062e9eb5b682d6a9ff71fdecc1b568332256d3a13a98"
+  },
+  "nodeGroups": [],
+  "id": "WTIiwRGXBD61QvIL",
+  "tags": []
+}

@@ -1,0 +1,540 @@
+{
+  "name": "Candidate refresh - LinkedIn changes tracker (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "41 15,20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "3143939b-9e9f-4f3a-8611-0a131502478c",
+      "name": "Schedule 3:41 PM + 8:41 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        384
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "05c9821d-20a7-44f4-b966-d2aa9778a9d8",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "options": {}
+      },
+      "id": "6d1900cb-d179-4443-bf8e-d08f832a9045",
+      "name": "Read ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "options": {}
+      },
+      "id": "d15f49fa-044c-4054-b393-a8d85f5dce9e",
+      "name": "Read AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        480
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Refresh: 25 purane candidates chuno jinki LinkedIn profile 30+ din se check nahi hui\n// (Enriched / Talent-pool ready / Contacted ... - Discovered aur Rejected nahi)\nconst LIMIT = 25, DAYS = 30;\nconst today = new Date(Date.now() + 5.5 * 3600e3);\nconst cutoff = new Date(today - DAYS * 864e5).toISOString().slice(0, 10);\nconst SKIP = /^(discovered|rejected)$/i;\nconst PRIO = r => /talent|ready|shortlist|contacted|interested/i.test(r.readiness) ? 0 : r.open_to_work === 'Yes' ? 1 : 2;\nconst take = (node, tab) => $(node).all().map(i => i.json)\n  .filter(r => r.linkedin_url && String(r.linkedin_url).includes('linkedin.com/in/') && r.readiness && !SKIP.test(String(r.readiness).trim()))\n  .map(r => ({ tab, row: r, checked: String(r.last_checked || r.last_updated || '').slice(0, 10) }))\n  .filter(x => !x.checked || x.checked <= cutoff)\n  .sort((a, b) => PRIO(a.row) - PRIO(b.row) || a.checked.localeCompare(b.checked));\nconst sn = take('Read ServiceNow rows', 'ServiceNow'), ai = take('Read AI_ML rows', 'AI_ML');\nconst picks = [];\nwhile (picks.length < LIMIT && (sn.length || ai.length)) {\n  if (sn.length) picks.push(sn.shift());\n  if (picks.length < LIMIT && ai.length) picks.push(ai.shift());\n}\nif (!picks.length) return [];   // abhi koi refresh ke liye due nahi\nreturn [{ json: { picks, urls: picks.map(p => String(p.row.linkedin_url).replace('://in.linkedin.com', '://www.linkedin.com')) } }];\n"
+      },
+      "id": "a1f1fff7-2f8e-4f50-8ae8-e60f23a4d0e9",
+      "name": "Pick 25 to refresh",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-profile-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ profileScraperMode: 'Profile details no email ($4 per 1k)', queries: $json.urls }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "ecb43ed7-a80f-4885-95e9-58e0429cb59c",
+      "name": "Apify LinkedIn profile (no email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1008,
+        480
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5jICMWywQKclPYES",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Refresh: nayi LinkedIn profile ko sheet wale data se milao -> kya badla, kab badla\nconst picks = $('Pick 25 to refresh').first().json.picks;\nconst profiles = $input.all().map(i => i.json).filter(p => p && (p.linkedinUrl || p.originalQuery));\nconst now = new Date(Date.now() + 5.5 * 3600e3);\nconst today = now.toISOString().slice(0, 10), stamp = now.toISOString().slice(0, 16).replace('T', ' ');\nconst MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };\nconst POOL_RX = { ServiceNow: /service\\s?now|\\bsnow\\b|\\bitsm\\b|\\bitom\\b|\\bcmdb\\b/i,\n  AI_ML: /machine learning|\\bml\\b|\\bai\\b|artificial intelligence|gen\\s?ai|generative|\\bllms?\\b|data scien|computer vision|\\bnlp\\b|deep learning|mlops|agentic/i };\nconst slug = u => (String(u || '').match(/linkedin\\.com\\/in\\/([^/?#]+)/i) || [])[1]?.toLowerCase();\nconst ym = d => d && d.year ? d.year * 12 + (MON[String(d.month || 'jan').slice(0, 3).toLowerCase()] ?? 0) : null;\nconst nowM = now.getUTCFullYear() * 12 + now.getUTCMonth();\nfunction months(list) {\n  const iv = list.filter(([s, e]) => s != null && e != null && e >= s).sort((a, b) => a[0] - b[0]);\n  let total = 0, cur = null;\n  for (const [s, e] of iv) { if (!cur || s > cur[1]) { if (cur) total += cur[1] - cur[0]; cur = [s, e]; } else cur[1] = Math.max(cur[1], e); }\n  if (cur) total += cur[1] - cur[0];\n  return total;\n}\nconst yrs = m => Math.round(m / 12 * 10) / 10;\nconst norm = v => String(v ?? '').trim().toLowerCase().replace(/\\s+/g, ' ');\nconst LABEL = { current_company: 'company', current_title: 'title', city: 'city', open_to_work: 'open_to_work', headline: 'headline' };\n\nconst updates = [], changes = [];\nlet changed = 0, same = 0, failed = 0, gone = 0;\nconst found = new Set();\nfor (const p of profiles) {\n  const s = slug(p.linkedinUrl) || slug(p.originalQuery && p.originalQuery.query);\n  const pk = picks.find(x => slug(x.row.linkedin_url) === s);\n  if (!pk || found.has(s)) continue;\n  found.add(s);\n  const { tab, row: r } = pk;\n  const exp = (p.experience || []).map(e => ({ ...e, s: ym(e.startDate), e: /present/i.test(e.endDate?.text || '') || !e.endDate ? nowM : ym(e.endDate) }));\n  const cur = exp.find(e => /present/i.test(e.endDate?.text || '') || !e.endDate) || exp[0] || {};\n  const loc = String(p.location?.linkedinText || '');\n  const fresh = {\n    current_company: cur.companyName || '', current_title: cur.position || '',\n    city: loc.split(',')[0].trim(), open_to_work: p.openToWork ? 'Yes' : 'No', headline: p.headline || '',\n  };\n  const upd = { linkedin_url: r.linkedin_url, last_checked: today };\n  const diff = [];\n  for (const [k, v] of Object.entries(fresh)) {\n    const old = r[k] ?? '';\n    if (!String(v).trim() || norm(old) === norm(v)) continue;        // naya khaali ya same -> kuch nahi\n    upd[k] = v;\n    if (!String(old).trim() || /^unknown$/i.test(String(old).trim())) continue;   // pehle khaali tha -> bas bhar do, change nahi\n    diff.push(`${LABEL[k]}: ${old} -> ${v}`);\n    changes.push({ date: stamp, pool: tab === 'AI_ML' ? 'AI/ML' : 'ServiceNow', name: r.name || p.firstName || '', linkedin_url: r.linkedin_url, field: k, old_value: String(old), new_value: String(v) });\n  }\n  // experience har baar naya (har mahine badhta hai, change log mein nahi daalte)\n  if (exp.length) {\n    const calc = yrs(months(exp.map(e => [e.s, e.e])));\n    if (calc > Number(r.total_experience_years || 0)) upd.total_experience_years = calc;\n    const dom = exp.filter(e => POOL_RX[tab].test(`${e.position || ''} ${e.description || ''} ${(e.skills || []).join(' ')}`));\n    if (dom.length) {\n      const d = yrs(months(dom.map(e => [e.s, e.e])));\n      const dk = tab === 'ServiceNow' ? 'servicenow_experience_years' : 'ai_ml_experience_years';\n      if (d > Number(r[dk] || 0)) { upd[dk] = d; upd.experience_bucket = d < 2 ? '0-2' : d < 5 ? '2-5' : d < 8 ? '5-8' : '8+'; }\n    }\n  }\n  const inIndia = p.location?.countryCode === 'IN' || /india/i.test(loc) || (!loc.trim() && !p.location?.countryCode);\n  if (!inIndia) {\n    diff.push(`moved out of India (${loc.trim()})`);\n    upd.readiness = 'Rejected';\n    changes.push({ date: stamp, pool: tab === 'AI_ML' ? 'AI/ML' : 'ServiceNow', name: r.name || '', linkedin_url: r.linkedin_url, field: 'readiness', old_value: String(r.readiness || ''), new_value: 'Rejected (not in India)' });\n  }\n  if (diff.length) {\n    changed++;\n    upd.last_updated = today;\n    upd.last_change = `${today}: ${diff.join('; ')}`;\n  } else same++;\n  updates.push({ json: { _tab: tab, ...upd } });\n}\nfor (const pk of picks) if (!found.has(slug(pk.row.linkedin_url))) {\n  failed++;\n  updates.push({ json: { _tab: pk.tab, linkedin_url: pk.row.linkedin_url, last_checked: today,\n    notes: `${pk.row.notes || ''}; refresh ${today}: profile nahi mili (private/deleted?)`.replace(/^; /, '') } });\n}\nconst stats = { stamp, requested: picks.length, changed, same, failed, fields: changes.length };\nreturn updates.map((o, i) => (i === 0 ? { json: { ...o.json, _stats: stats, _changes: changes } } : o));\n"
+      },
+      "id": "4ebba56e-2cce-46ef-a2e4-e26f65383fa3",
+      "name": "Compare + build updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sirf ServiceNow rows (helper fields hata ke)\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow').map(i => { const { _tab, _stats, _changes, ...row } = i.json; return { json: row }; });\n"
+      },
+      "id": "1082a38e-81e6-4b20-9d5f-55322b6b46cc",
+      "name": "Only ServiceNow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "44f6f831-d483-41c0-b53c-5407b4c91663",
+      "name": "Update ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sirf AI_ML rows (helper fields hata ke)\nreturn $input.all().filter(i => i.json._tab === 'AI_ML').map(i => { const { _tab, _stats, _changes, ...row } = i.json; return { json: row }; });\n"
+      },
+      "id": "8ef7f847-be4b-44dd-83e8-ae74c6a7f710",
+      "name": "Only AI_ML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "e4e9144b-2a7a-4b6b-b3e7-dc59b9a4cf0c",
+      "name": "Update AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        448
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// changes tab ke liye: har badla hua field = 1 row\nconst ch = $input.first().json._changes || [];\nreturn ch.map(c => ({ json: c }));\n"
+      },
+      "id": "905a1d71-0940-426e-ad08-e5e61ef699d2",
+      "name": "Build change list",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "188616484",
+          "mode": "id",
+          "cachedResultName": "changes"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "0c86ee97-388b-46a0-9f5d-9619b6f4a952",
+      "name": "Add to changes tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        608
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $input.first().json._stats;\nreturn [{ json: { 'Run date': s.stamp, 'Flow': 'n8n (refresh)', 'Queries': 0, 'Google results': '', 'LinkedIn profiles found': s.requested,\n  'Rejected (not India / wrong title / duplicate)': '', 'New rows added': `${s.changed} changed, ${s.same} same`,\n  'Apify cost ($)': Math.round(s.requested * 0.004 * 1000) / 1000,\n  'Notes': `Refresh: ${s.fields} field changes logged in \"changes\" tab. Profile not found: ${s.failed}.` } }];\n"
+      },
+      "id": "377da3e2-8e4b-4ff4-89fb-7a02d5428b94",
+      "name": "Build run log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "63406601",
+          "mode": "id",
+          "cachedResultName": "runs"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "eaf34a7b-ae55-4667-af2b-79ce068873a7",
+      "name": "Log to runs tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        768
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Candidate refresh (n8n)\nRoz 3:41 PM + 8:41 PM (IST), har baar 25 log ($0.004 each).\nJin candidates ki profile 30+ din se check nahi hui (Enriched ya aage) -> LinkedIn dobara padho.\nBadla: company / title / city / open_to_work / headline ->\n- row update, last_updated + last_change ('2026-11-05: company: TCS -> Infosys')\n- har change 'changes' tab mein (date, old, new)\nSab rows: last_checked = aaj. Bahar India gaya -> Rejected.",
+        "height": 300,
+        "width": 560
+      },
+      "id": "c6e0f659-4753-4fac-b109-eceb5cd1a406",
+      "name": "Note 3bbd",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule 3:41 PM + 8:41 PM": {
+      "main": [
+        [
+          {
+            "node": "Read ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ServiceNow rows": {
+      "main": [
+        [
+          {
+            "node": "Read AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read AI_ML rows": {
+      "main": [
+        [
+          {
+            "node": "Pick 25 to refresh",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick 25 to refresh": {
+      "main": [
+        [
+          {
+            "node": "Apify LinkedIn profile (no email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify LinkedIn profile (no email)": {
+      "main": [
+        [
+          {
+            "node": "Compare + build updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare + build updates": {
+      "main": [
+        [
+          {
+            "node": "Only ServiceNow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only AI_ML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build change list",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only ServiceNow": {
+      "main": [
+        [
+          {
+            "node": "Update ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only AI_ML": {
+      "main": [
+        [
+          {
+            "node": "Update AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build change list": {
+      "main": [
+        [
+          {
+            "node": "Add to changes tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run log": {
+      "main": [
+        [
+          {
+            "node": "Log to runs tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WTIiwRGXBD61QvIL",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "67b787cc-70db-4432-8682-03893151e8df",
+  "meta": {
+    "instanceId": "8fd2667a3a618d1ad72c062e9eb5b682d6a9ff71fdecc1b568332256d3a13a98"
+  },
+  "nodeGroups": [],
+  "id": "mOfKzRJGOiYR8QJh",
+  "tags": []
+}

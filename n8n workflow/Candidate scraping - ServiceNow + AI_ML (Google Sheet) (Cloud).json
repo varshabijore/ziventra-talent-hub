@@ -1,0 +1,579 @@
+{
+  "name": "Candidate scraping - ServiceNow + AI/ML (Google Sheet) (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "12 10,13,16,18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a5524fe6-e21c-418d-b43a-72436c64a271",
+      "name": "Schedule 10-7 (4 times)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        352
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "7fc27ad4-e09b-4812-bd75-285aed3f25c4",
+      "name": "Manual test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "799206154",
+          "mode": "id",
+          "cachedResultName": "queries"
+        },
+        "options": {}
+      },
+      "id": "397e4016-f296-4626-ab25-8a2f7b95f2c3",
+      "name": "Read queries",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        448
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick next 5 searches (pool x title x city) that are not yet in the \"queries\" tab\nconst PER_RUN = 15;\nconst CITIES = [\"Bengaluru\",\"Hyderabad\",\"Pune\",\"Chennai\",\"Noida\",\"Gurugram\",\"Mumbai\",\"Delhi\",\"Kolkata\",\"Ahmedabad\",\"Kochi\",\"Indore\",\"Jaipur\",\"Chandigarh\",\"Coimbatore\",\"Thiruvananthapuram\",\"Nagpur\",\"Bhubaneswar\",\"Mysuru\",\"Vadodara\"];\nconst SN = [\"ServiceNow Developer\",\"ServiceNow Administrator\",\"ServiceNow Architect\",\"ServiceNow Consultant\",\"ServiceNow Technical Lead\",\"ServiceNow ITSM Developer\",\"ServiceNow ITOM\",\"ServiceNow HRSD\",\"ServiceNow CSM\",\"ServiceNow SecOps\",\"ServiceNow Business Analyst\",\"ServiceNow Tester\"];\nconst AI = [\"Machine Learning Engineer\",\"GenAI Engineer\",\"LLM Engineer\",\"AI Engineer\",\"Data Scientist\",\"Computer Vision Engineer\",\"NLP Engineer\",\"MLOps Engineer\",\"AI Architect\",\"Applied Scientist\",\"Deep Learning Engineer\",\"AI/ML Engineer\"];\n\nconst key = (p, t, c) => `${p}|${t}|${c}`.toLowerCase();\nconst done1 = new Set(), done2 = new Set();\nfor (const it of $input.all()) {\n  const r = it.json || {};\n  if (!r.pool) continue;\n  const k = key(r.pool, r.title, r.city);\n  if (String(r.note || '').toLowerCase().includes('page 2')) done2.add(k); else done1.add(k);\n}\nconst all = [];\nfor (const city of CITIES) for (let i = 0; i < 12; i++) {\n  all.push({ pool: 'ServiceNow', title: SN[i], city });\n  all.push({ pool: 'AI/ML', title: AI[i], city });\n}\nlet pages = 1;\nlet picked = all.filter(q => !done1.has(key(q.pool, q.title, q.city))).slice(0, PER_RUN);\nif (!picked.length) {\n  pages = 2;\n  picked = all.filter(q => !done2.has(key(q.pool, q.title, q.city))).slice(0, PER_RUN);\n}\nif (!picked.length) return [];   // sab ho gaya\nfor (const q of picked) q.query = `site:linkedin.com/in \"${q.title}\" \"${q.city}\"`;\nreturn [{ json: { picked, pages, queryText: picked.map(q => q.query).join('\\n') } }];\n"
+      },
+      "id": "c0565c9f-7953-4f54-81b5-17c4814204a8",
+      "name": "Pick 5 searches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/apify~google-search-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ queries: $json.queryText, maxPagesPerQuery: $json.pages, resultsPerPage: 10, countryCode: 'in', languageCode: 'en', mobileResults: false, saveHtml: false, saveHtmlToKeyValueStore: false, includeUnfilteredResults: false }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "f0fe3e02-862e-4914-ab66-a88f40068389",
+      "name": "Apify Google search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        768,
+        448
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5jICMWywQKclPYES",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "options": {}
+      },
+      "id": "3108e0ba-f70f-4a65-8a5d-2680aeb4bf48",
+      "name": "Read ServiceNow URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1008,
+        448
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "options": {}
+      },
+      "id": "333cbd04-1011-4512-8cb1-de3b804ef8ce",
+      "name": "Read AI_ML URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1248,
+        448
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Google results -> clean candidate rows (same 40 columns as the Claude flow)\nconst pick = $('Pick 5 searches').first().json;\nconst pages = $('Apify Google search').all().map(i => i.json);\nconst existing = new Set();\nfor (const n of ['Read ServiceNow URLs', 'Read AI_ML URLs'])\n  for (const it of $(n).all()) if (it.json.linkedin_url) existing.add(String(it.json.linkedin_url).toLowerCase());\n\nconst now = new Date(Date.now() + 5.5 * 3600e3);           // IST\nconst today = now.toISOString().slice(0, 10);\nconst stamp = now.toISOString().slice(0, 16).replace('T', ' ');\n\nconst STATE = { bengaluru: 'Karnataka', bangalore: 'Karnataka', mysuru: 'Karnataka', mysore: 'Karnataka', hyderabad: 'Telangana', secunderabad: 'Telangana',\n  pune: 'Maharashtra', mumbai: 'Maharashtra', 'navi mumbai': 'Maharashtra', thane: 'Maharashtra', nagpur: 'Maharashtra', 'pimpri': 'Maharashtra',\n  chennai: 'Tamil Nadu', coimbatore: 'Tamil Nadu', noida: 'Uttar Pradesh', 'greater noida': 'Uttar Pradesh', lucknow: 'Uttar Pradesh',\n  gurugram: 'Haryana', gurgaon: 'Haryana', delhi: 'Delhi', 'new delhi': 'Delhi', kolkata: 'West Bengal', ahmedabad: 'Gujarat', vadodara: 'Gujarat',\n  kochi: 'Kerala', cochin: 'Kerala', thiruvananthapuram: 'Kerala', trivandrum: 'Kerala', indore: 'Madhya Pradesh', bhopal: 'Madhya Pradesh',\n  jaipur: 'Rajasthan', chandigarh: 'Chandigarh', mohali: 'Punjab', bhubaneswar: 'Odisha' };\nconst CITY_NAME = { bangalore: 'Bengaluru', gurgaon: 'Gurugram', cochin: 'Kochi', trivandrum: 'Thiruvananthapuram', mysore: 'Mysuru', 'new delhi': 'Delhi', pimpri: 'Pune' };\nconst POOL_RX = { 'ServiceNow': /service\\s?now|\\bsnow\\b|\\bitsm\\b|\\bitom\\b|\\bcmdb\\b|\\bhrsd\\b/i,\n  'AI/ML': /machine learning|\\bml\\b|\\bai\\b|artificial intelligence|gen\\s?ai|generative|\\bllms?\\b|data scien|computer vision|\\bnlp\\b|deep learning|mlops|\\bagentic\\b|applied scientist|research scientist/i };\nconst REJECT_RX = /recruit|talent acquisition|\\bhr\\b|human resource|staffing|sourcing specialist|\\bsales\\b|business development|account (manager|executive)/i;\nconst STD = { 'ServiceNow Developer': 'ServiceNow Developer', 'ServiceNow ITSM Developer': 'ServiceNow Developer', 'ServiceNow Administrator': 'ServiceNow Administrator',\n  'ServiceNow Architect': 'ServiceNow Architect', 'ServiceNow Consultant': 'ServiceNow Consultant', 'ServiceNow Technical Lead': 'ServiceNow Technical Lead',\n  'ServiceNow ITOM': 'ServiceNow Developer', 'ServiceNow HRSD': 'ServiceNow Developer', 'ServiceNow CSM': 'ServiceNow Developer', 'ServiceNow SecOps': 'ServiceNow Developer',\n  'ServiceNow Business Analyst': 'ServiceNow Business Analyst', 'ServiceNow Tester': 'ServiceNow Tester',\n  'Machine Learning Engineer': 'Machine Learning Engineer', 'AI/ML Engineer': 'Machine Learning Engineer', 'Deep Learning Engineer': 'Machine Learning Engineer',\n  'GenAI Engineer': 'Generative AI / LLM Engineer', 'LLM Engineer': 'Generative AI / LLM Engineer', 'AI Engineer': 'AI Engineer', 'Data Scientist': 'Data Scientist',\n  'Computer Vision Engineer': 'Computer Vision Engineer', 'NLP Engineer': 'NLP Engineer', 'MLOps Engineer': 'MLOps Engineer', 'AI Architect': 'AI Architect',\n  'Applied Scientist': 'Applied / Research Scientist' };\nconst ROLE_SN = [[/architect/i, 'Architect'], [/admin/i, 'Administrator'], [/consult/i, 'Consultant'], [/test|\\bqa\\b/i, 'Tester'], [/business analyst|\\bba\\b/i, 'BA'], [/lead|manager/i, 'Lead'], [/./, 'Developer']];\nconst ROLE_AI = [[/gen\\s?ai|generative|llm|agentic/i, 'GenAI'], [/vision/i, 'Computer Vision'], [/nlp|language/i, 'NLP'], [/mlops/i, 'MLOps'], [/data scien/i, 'Data Science'], [/research|applied scien/i, 'Research'], [/./, 'ML Engineering']];\nconst MOD_SN = [['ITSM', /\\bitsm\\b|incident|change management|service catalog/i], ['ITOM', /\\bitom\\b|discovery|event management/i], ['CMDB', /\\bcmdb\\b/i], ['HRSD', /\\bhrsd\\b|\\bhr service/i],\n  ['CSM', /\\bcsm\\b|customer service management/i], ['SecOps', /secops|security operations/i], ['ITAM/SAM', /\\bitam\\b|\\bsam\\b|asset management/i], ['GRC/IRM', /\\bgrc\\b|\\birm\\b/i],\n  ['ITBM/SPM', /\\bitbm\\b|\\bspm\\b|\\bppm\\b/i], ['Service Portal', /service portal/i], ['Integrations', /integration|rest api/i], ['Flow Designer', /flow designer/i]];\nconst MOD_AI = [['GenAI', /gen\\s?ai|generative/i], ['LLMs', /\\bllms?\\b|large language/i], ['RAG', /\\brag\\b|retrieval/i], ['Agentic AI', /agentic|ai agents?|multi-agent/i],\n  ['Computer Vision', /computer vision|\\bcv\\b|image|yolo|opencv/i], ['NLP', /\\bnlp\\b|natural language/i], ['MLOps', /mlops/i], ['Data Science', /data scien/i], ['Deep Learning', /deep learning|pytorch|tensorflow/i]];\nconst CERT_RX = /\\b(CSA|CAD|CTA|CIS[- ]?[A-Z]{2,5}|CMA|ITIL(?: v4)?|AWS Certified[\\w ]*|Azure AI[\\w ]*|Google Cloud Certified[\\w ]*|TensorFlow Developer)\\b/g;\n\nconst clean = s => String(s || '').replace(/\\s+/g, ' ').replace(/\\s*\\.\\.\\.$/, '').trim();\nconst slugOf = url => { const m = String(url || '').match(/linkedin\\.com\\/in\\/([^/?#]+)/i); return m ? decodeURIComponent(m[1]).toLowerCase() : null; };\nconst findCity = text => {\n  const t = String(text || '').toLowerCase();\n  for (const c of Object.keys(STATE).sort((a, b) => b.length - a.length)) if (new RegExp(`\\\\b${c}\\\\b`).test(t)) return c;\n  return null;\n};\nconst cap = c => CITY_NAME[c] || c.replace(/\\b\\w/g, x => x.toUpperCase());\n\nconst rows = [], perQuery = {}, rejected = { not_india: 0, wrong_title: 0, recruiter: 0, no_name: 0, duplicate: 0 };\nlet googleResults = 0, profiles = 0;\nconst seen = new Set();\nfor (const page of pages) {\n  const term = (page.searchQuery && page.searchQuery.term) || '';\n  const q = pick.picked.find(p => p.query === term) || pick.picked.find(p => term.includes(p.title) && term.includes(p.city));\n  if (!q) continue;\n  const qk = `${q.pool}|${q.title}|${q.city}`;\n  perQuery[qk] = perQuery[qk] || { results: 0, added: 0 };\n  for (const r of page.organicResults || []) {\n    googleResults++; perQuery[qk].results++;\n    const slug = slugOf(r.url);\n    if (!slug) continue;\n    profiles++;\n    const url = `https://www.linkedin.com/in/${slug}`;\n    if (seen.has(url) || existing.has(url) || existing.has(`https://www.linkedin.com/in/${slug}`)) { rejected.duplicate++; continue; }\n    const pi = r.personalInfo || {};\n    const parts = clean(r.title).replace(/\\s*[|·-]\\s*LinkedIn.*$/i, '').split(/\\s+-\\s+/);\n    const name = clean(parts[0]);\n    const headline = clean(parts.slice(1).join(' - '));\n    const desc = clean(r.description);\n    const blob = `${headline} ${pi.jobTitle || ''} ${desc}`;\n    if (!name || name.length < 2 || /servicenow|linkedin|developer|engineer/i.test(name)) { rejected.no_name++; continue; }\n    const loc = `${pi.location || ''} ${desc}`;\n    const cityKey = findCity(pi.location) || findCity(desc) || (/\\bindia\\b/i.test(loc) ? q.city.toLowerCase() : null);\n    if (!cityKey) { rejected.not_india++; continue; }\n    if (REJECT_RX.test(`${headline} ${pi.jobTitle || ''}`)) { rejected.recruiter++; continue; }\n    if (!POOL_RX[q.pool].test(blob)) { rejected.wrong_title++; continue; }\n    seen.add(url);\n\n    const titleText = `${headline} ${pi.jobTitle || ''}`;\n    const exact = new RegExp(q.title.replace(/[/]/g, '.').replace(/\\s+/g, '\\\\s*'), 'i').test(titleText) ||\n      (q.pool === 'ServiceNow' && /service\\s?now/i.test(titleText)) ||\n      (q.pool === 'AI/ML' && POOL_RX['AI/ML'].test(titleText));\n    // kul experience sirf tab jab likha ho (\"6+ years\", \"5 years of experience\"); \"Present 2 years 10 months\" = abhi ki job ka time\n    const tm = blob.match(/(?:with\\s+|over\\s+)?(\\d{1,2})\\+\\s*(?:years|yrs)|(\\d{1,2})\\s*(?:years|yrs)\\s*(?:of\\s*)?(?:experience|exp)/i);\n    const y = tm ? Number(tm[1] || tm[2]) : '';\n    const ten = blob.match(/Present\\s*(\\d{1,2})\\s*years?(?:\\s*(\\d{1,2})\\s*months?)?/i);\n    const domain = ten && POOL_RX[q.pool].test(`${pi.jobTitle || ''} ${headline}`) ? Math.round((Number(ten[1]) + Number(ten[2] || 0) / 12) * 10) / 10 : '';\n    const by = domain !== '' ? domain : y;\n    const bucket = by === '' ? 'Unknown' : by < 2 ? '0-2' : by < 5 ? '2-5' : by < 8 ? '5-8' : '8+';\n    const otw = /open\\s?to\\s?work|immediate joiner|#?immediatejoiner|seeking|looking for (a )?(new )?(job|opportunit|role)/i.test(blob);\n    const sen = /\\bintern\\b/i.test(titleText) ? 'Intern' : /\\b(head|director|manager)\\b/i.test(titleText) ? 'Manager' :\n      /\\b(lead|principal|staff|architect)\\b/i.test(titleText) ? 'Lead' : /\\b(senior|sr\\.?)\\b/i.test(titleText) ? 'Senior' :\n      /\\b(junior|jr\\.?|associate|trainee|fresher)\\b/i.test(titleText) ? 'Junior' : 'Mid';\n    const mods = (q.pool === 'ServiceNow' ? MOD_SN : MOD_AI).filter(([, rx]) => rx.test(blob)).map(([m]) => m);\n    const certs = [...new Set((blob.match(CERT_RX) || []).map(c => c.toUpperCase().replace(/\\s+/g, ' ')))];\n    const edu = (desc.match(/Education:\\s*([^·.]+)/i) || [])[1];\n    const notes = [edu && `Education: ${clean(edu)}`, /immediate/i.test(blob) && 'Immediate joiner', (desc.match(/[A-Z][a-z]{2} \\d{4} - Present/) || [])[0] && `Current role since ${(desc.match(/([A-Z][a-z]{2} \\d{4}) - Present/) || [])[1]}`]\n      .filter(Boolean).join('; ');\n    const email = (desc.match(/[\\w.+-]+@[\\w-]+\\.[\\w.]+/) || [])[0] || '';\n    const city = cap(cityKey);\n    const row = {\n      name, linkedin_url: url, headline, city,\n      current_title: clean(pi.jobTitle) || headline, current_company: clean(pi.companyName),\n      role_category: (q.pool === 'ServiceNow' ? ROLE_SN : ROLE_AI).find(([rx]) => rx.test(`${q.title} ${titleText}`))[1],\n      total_experience_years: y, [q.pool === 'ServiceNow' ? 'servicenow_experience_years' : 'ai_ml_experience_years']: domain,\n      experience_bucket: bucket, [q.pool === 'ServiceNow' ? 'modules' : 'specialization']: mods.join('; '),\n      certifications: certs.join('; '), skills: '', open_to_work: otw ? 'Yes' : 'Unknown', resume_status: 'Not collected',\n      standard_title: STD[q.title] || q.title, title_match: exact ? 'Exact' : 'Related', seniority: sen, past_employers: '',\n      state: STATE[cityKey] || '', country: 'India', email, email_status: email ? 'Unverified' : 'Not found',\n      phone: '', phone_status: 'Not found', contact_source: email ? 'Google snippet' : '', readiness: 'Discovered',\n      interest: 'Unknown', availability: /immediate/i.test(blob) ? 'Immediate' : '', notice_period: '', expected_salary: '',\n      consent: 'No', last_contacted: '', source: 'LinkedIn (Google search)', source_flow: 'n8n', search_query: `${q.title} / ${q.city}`,\n      first_seen: today, last_updated: today, duplicate_flag: 'No', notes,\n    };\n    if (q.pool === 'AI/ML') row.github_url = '';\n    rows.push({ json: { _tab: q.pool === 'ServiceNow' ? 'ServiceNow' : 'AI_ML', ...row } });\n    perQuery[qk].added++;\n  }\n}\nconst totalRejected = Object.values(rejected).reduce((a, b) => a + b, 0);\nconst stats = {\n  stamp, pages: pick.pages, googleResults, profiles, added: rows.length, rejected: totalRejected,\n  rejectedNote: Object.entries(rejected).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ') || 'none',\n  sn: rows.filter(r => r.json._tab === 'ServiceNow').length, ai: rows.filter(r => r.json._tab === 'AI_ML').length,\n  perQuery: pick.picked.map(p => ({ ...p, ...(perQuery[`${p.pool}|${p.title}|${p.city}`] || { results: 0, added: 0 }) })),\n};\nif (!rows.length) return [{ json: { _tab: 'none', _stats: stats } }];\nreturn rows.map((r, i) => (i === 0 ? { json: { ...r.json, _stats: stats } } : r));\n"
+      },
+      "id": "00a3984a-b766-436f-947c-47b2f3c1406f",
+      "name": "Clean + build rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sirf ServiceNow rows (helper fields hata ke)\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow').map(i => { const { _tab, _stats, ...row } = i.json; return { json: row }; });\n"
+      },
+      "id": "c072f9b7-7c86-4d84-864d-03c75812ccce",
+      "name": "Only ServiceNow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "1627b5ad-5c91-4207-b2f4-4d6eb40fa6ea",
+      "name": "Add to ServiceNow tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sirf AI_ML rows (helper fields hata ke)\nreturn $input.all().filter(i => i.json._tab === 'AI_ML').map(i => { const { _tab, _stats, ...row } = i.json; return { json: row }; });\n"
+      },
+      "id": "67ae3530-82f3-4e01-b263-3f90ad824f6b",
+      "name": "Only AI_ML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "b8c3ce3d-b25a-4a3c-ad11-7fb21254edf8",
+      "name": "Add to AI_ML tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        448
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// queries tab ke liye 5 rows (kaunsi search hui, kitne mile)\nconst s = $input.first().json._stats;\nreturn s.perQuery.map(p => ({ json: { pool: p.pool, title: p.title, city: p.city, run_at: s.stamp, google_results: p.results,\n  new_rows_added: p.added, note: (s.pages === 2 ? 'page 2; ' : '') + 'n8n' } }));\n"
+      },
+      "id": "75561f27-d106-430b-9a23-4ad4060a7468",
+      "name": "Build query log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "799206154",
+          "mode": "id",
+          "cachedResultName": "queries"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "e60118dd-81de-4745-bc92-5db1a2a2a067",
+      "name": "Log to queries tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        608
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// runs tab ke liye 1 row\nconst s = $input.first().json._stats;\nreturn [{ json: {\n  'Run date': s.stamp, 'Flow': 'n8n (scheduled)', 'Queries': s.perQuery.length, 'Google results': s.googleResults,\n  'LinkedIn profiles found': s.profiles, 'Rejected (not India / wrong title / duplicate)': s.rejected, 'New rows added': s.added,\n  'Apify cost ($)': Math.round(s.perQuery.length * s.pages * 0.0045 * 1000) / 1000,\n  'Notes': `${s.sn} ServiceNow + ${s.ai} AI/ML. Rejected: ${s.rejectedNote}.`,\n} }];\n"
+      },
+      "id": "9f0b6457-9ed1-4e01-876b-93e9b613c5cd",
+      "name": "Build run log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "63406601",
+          "mode": "id",
+          "cachedResultName": "runs"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "4d84ae88-d4e3-4556-b5b3-94f0417600ba",
+      "name": "Log to runs tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        768
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "28QrjDFPK6iu9ici",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Candidate scraping (n8n)\nRoz 10:12, 1:12, 4:12, 6:12 (IST).\n1. queries tab se agli 5 searches\n2. Apify Google search (LinkedIn profiles)\n3. India + sahi title + recruiter nahi + duplicate nahi\n4. ServiceNow / AI_ML tab mein rows (source_flow = n8n)\n5. queries + runs tab mein log",
+        "height": 260,
+        "width": 520
+      },
+      "id": "1ae2eb99-4d0a-44d3-97e3-11bf114fc0a8",
+      "name": "Note c933",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule 10-7 (4 times)": {
+      "main": [
+        [
+          {
+            "node": "Read queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual test run": {
+      "main": [
+        [
+          {
+            "node": "Read queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read queries": {
+      "main": [
+        [
+          {
+            "node": "Pick 5 searches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick 5 searches": {
+      "main": [
+        [
+          {
+            "node": "Apify Google search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify Google search": {
+      "main": [
+        [
+          {
+            "node": "Read ServiceNow URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ServiceNow URLs": {
+      "main": [
+        [
+          {
+            "node": "Read AI_ML URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read AI_ML URLs": {
+      "main": [
+        [
+          {
+            "node": "Clean + build rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean + build rows": {
+      "main": [
+        [
+          {
+            "node": "Only ServiceNow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only AI_ML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build query log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build run log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only ServiceNow": {
+      "main": [
+        [
+          {
+            "node": "Add to ServiceNow tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only AI_ML": {
+      "main": [
+        [
+          {
+            "node": "Add to AI_ML tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build query log": {
+      "main": [
+        [
+          {
+            "node": "Log to queries tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run log": {
+      "main": [
+        [
+          {
+            "node": "Log to runs tab",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WTIiwRGXBD61QvIL",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "df7e25b6-def4-4d75-a6ca-27e2623fad70",
+  "meta": {
+    "instanceId": "8fd2667a3a618d1ad72c062e9eb5b682d6a9ff71fdecc1b568332256d3a13a98"
+  },
+  "nodeGroups": [],
+  "id": "qCDKj7QTaQtRO6c4",
+  "tags": []
+}

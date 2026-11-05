@@ -68,12 +68,14 @@ export const StatusChip = ({ status }) => <span className={"chip " + (D_TONE[sta
 export const tone = (p) => (p >= 90 ? ["var(--good)", "c-good"] : p >= 70 ? ["var(--info)", "c-info"] : p >= 50 ? ["var(--warn)", "c-warn"] : ["var(--bad)", "c-bad"]);
 export const Avatar = ({ c, className = "" }) => <div className={`av ${poolCls(c.pool)} ${className}`}>{initials(c.name)}</div>;
 
-export function Kpi({ icon, bg, fg, label, value, sub, up, highlight }) {
+// onClick: the whole card becomes a button (e.g. opens a small popup with the full numbers)
+export function Kpi({ icon, bg, fg, label, value, sub, up, highlight, onClick }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="kpi" style={highlight ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : undefined}>
+    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={"kpi" + (onClick ? " kbtn" : "")} style={highlight ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : undefined}>
       {icon && <div className="ic" style={{ background: bg, color: fg }}><Icon name={icon} /></div>}
       <div><div className="l">{label}</div><div className="v">{value}</div><div className={"d" + (up ? " up" : "")}>{sub}</div></div>
-    </div>
+    </Tag>
   );
 }
 
@@ -143,14 +145,15 @@ export function Modal({ onClose, children, wide }) {
 }
 
 // ---------- charts ----------
-export function BarChart({ rows, series, height = 170, width = 900, every = 1 }) {
+// grouped: bars side by side (e.g. found vs enriched) instead of stacked; values: number on top of each bar
+export function BarChart({ rows, series, height = 170, width = 900, every = 1, grouped = false, values = false }) {
   const ref = useRef(null);
   useEffect(() => { if (ref.current) ref.current.scrollLeft = ref.current.scrollWidth; }, [rows]);
   const W = width, H = height, L = 36, B = 26, n = rows.length || 1, bw = (W - L) / n;
-  const max = Math.max(4, ...rows.map((r) => series.reduce((a, s) => a + (r[s.key] || 0), 0)));
+  const max = Math.max(4, ...rows.map((r) => grouped ? Math.max(...series.map((s) => r[s.key] || 0)) : series.reduce((a, s) => a + (r[s.key] || 0), 0)));
   const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000].find((s) => max / s <= 5) || 20000;
   const top = Math.ceil(max / step) * step;
-  const y = (v) => H - B - (v / top) * (H - B - 12);
+  const y = (v) => H - B - (v / top) * (H - B - (values ? 24 : 12));
   const ticks = [];
   for (let t = 0; t <= top; t += step) ticks.push(t);
   return (
@@ -163,8 +166,13 @@ export function BarChart({ rows, series, height = 170, width = 900, every = 1 })
             let acc = 0;
             return (
               <g key={i}>
-                {series.map((s) => {
+                {series.map((s, k) => {
                   const v = r[s.key] || 0;
+                  if (grouped) {
+                    const gw = w / series.length, gx = x + k * gw;
+                    return v ? <g key={s.key}><rect x={gx + 1} y={y(v)} width={Math.max(2, gw - 2)} height={y(0) - y(v)} rx="2" fill={s.color}><title>{`${r.label}: ${s.name} ${fmt(v)}`}</title></rect>
+                      {values && <text x={gx + gw / 2} y={y(v) - 4} textAnchor="middle" className="bval">{fmt(v)}</text>}</g> : null;
+                  }
                   const el = v ? <rect key={s.key} x={x} y={y(acc + v)} width={w} height={y(acc) - y(acc + v)} rx="2" fill={s.color}><title>{`${r.label}: ${s.name} ${fmt(v)}`}</title></rect> : null;
                   acc += v;
                   return el;

@@ -10,7 +10,3 @@ node_modules/
 dist/
 backups/
 *.json.gz
-
-*.zip
-n8n workflow/
-n8n_*.json

@@ -1,0 +1,636 @@
+{
+  "name": "Apollo phone webhook - all pools (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "apollo-phone-ziventra",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "d9166748-a422-40cf-a07b-ca951944654a",
+      "name": "Apollo phone webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "033df5bd-15e3-4447-aa34-e7c391f6bdc9"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apollo ka phone number webhook -> sheet tab + MongoDB (8 credit per mobile)\nconst q = $input.first().json.query || {}, b = $input.first().json.body || {};\nconst people = b.people || (b.person ? [b.person] : []);\nconst nums = people.flatMap(p => p.phone_numbers || []).sort((x, y) => (y.type_cd === 'mobile') - (x.type_cd === 'mobile'));\nconst phone = nums[0] ? (nums[0].sanitized_number || nums[0].raw_number) : '';\nconst url = String(q.li || '');\nif (!url) return [];\nconst now = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');\nreturn [{ json: { _tab: ['ServiceNow', 'AI_ML', 'Salesforce', 'Workday', 'Custom'].includes(q.tab) ? q.tab : 'ServiceNow', phone,\n  sheet: phone ? { linkedin_url: url, phone, phone_status: `Apollo (${nums[0].type_cd || 'phone'}, ${nums[0].confidence_cd || '-'})` } : null,\n  mongo: { linkedin_url: url.replace('://in.linkedin.com', '://www.linkedin.com').toLowerCase().replace(/\\/+$/, ''), apollo_phone: phone || 'not found', apollo_phone_at: now } } }];\n"
+      },
+      "id": "5e1d0c5a-9a6f-4778-87c7-2f9e72c16cc6",
+      "name": "Read phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "3bec2855-298c-48c8-a4c8-39870e4d6a21",
+      "name": "ServiceNow sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "437044392",
+          "mode": "id",
+          "cachedResultName": "ServiceNow"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "440974d6-6cad-49f6-bbda-f469cd90badd",
+      "name": "Update ServiceNow rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "ca8a17cb-8ac5-4e7b-bb84-587324b49572",
+      "name": "AI_ML sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -450
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1510961452",
+          "mode": "id",
+          "cachedResultName": "AI_ML"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "f1f550e4-b534-41f7-ad69-b53d821bcc73",
+      "name": "Update AI_ML rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        -450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Salesforce ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'Salesforce' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "397fad5d-b60a-43e8-ab10-9a14e75097fa",
+      "name": "Salesforce sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1881729021",
+          "mode": "id",
+          "cachedResultName": "Salesforce"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "03e53754-e5b6-4a4f-8b40-491e30270b5d",
+      "name": "Update Salesforce rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Workday ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'Workday' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "3c279be5-c0bf-4178-8a17-2b50381df925",
+      "name": "Workday sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "645495608",
+          "mode": "id",
+          "cachedResultName": "Workday"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "3bacab3a-97db-4c93-9b4b-7b5a949778d3",
+      "name": "Update Workday rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Custom ke sheet rows\nreturn $input.all().filter(i => i.json._tab === 'Custom' && i.json.sheet).map(i => ({ json: i.json.sheet }));\n"
+      },
+      "id": "5b02053d-5604-46e0-aaa3-96a03a26c308",
+      "name": "Custom sheet row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "15YdyM0zaFwgehYAdt3mL70m5acO8iT3ArdNGCCPzBnc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "2028787463",
+          "mode": "id",
+          "cachedResultName": "Custom"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "linkedin_url"
+          ],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "85bfa311-31b0-405b-8a44-d86752f66e59",
+      "name": "Update Custom rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf ServiceNow ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'ServiceNow' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "68fe2090-b3ed-41fe-81d2-26c150ecd29d",
+      "name": "ServiceNow Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "upsert": false,
+        "options": {}
+      },
+      "id": "93803fab-4b30-45f4-a68d-3dabe5ee187b",
+      "name": "Save to ServiceNow MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf AI_ML ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'AI_ML' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "73432742-0657-4e5d-b436-5543af912015",
+      "name": "AI_ML Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "upsert": false,
+        "options": {}
+      },
+      "id": "ca3b7cf6-b055-46ae-8f64-b30439ddcd8c",
+      "name": "Save to AI/ML MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Salesforce ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'Salesforce' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "5c77a300-bdfd-4af7-b3d9-8e17071eff0e",
+      "name": "Salesforce Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "upsert": false,
+        "options": {}
+      },
+      "id": "b5c8e358-cd7a-40ac-ba16-65f35301c1b8",
+      "name": "Save to Salesforce MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Workday ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'Workday' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "9d2f4298-4ca6-482f-a6e1-c1248796b3a7",
+      "name": "Workday Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_master",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "upsert": false,
+        "options": {}
+      },
+      "id": "ba221421-ecda-4e63-9a45-6662ea4e8f01",
+      "name": "Save to Workday MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// sirf Custom ke mongo rows\nreturn $input.all().filter(i => i.json._tab === 'Custom' && i.json.mongo).map(i => ({ json: i.json.mongo }));\n"
+      },
+      "id": "a7b140c4-3aa8-4c8c-85fc-a1afdcb52b88",
+      "name": "Custom Mongo row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "candidates_custom",
+        "updateKey": "linkedin_url",
+        "fields": "linkedin_url,apollo_phone,apollo_phone_at",
+        "upsert": false,
+        "options": {}
+      },
+      "id": "d362d949-fbbc-4aaa-bd77-9e80d1bf205f",
+      "name": "Save to added pools MongoDB",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Apollo phone webhook - SAARE POOLS\nApollo mobile number thodi der baad yahan bhejta hai. Publish karo.\nPurana 'Apollo phone webhook' pehle UNPUBLISH karo (same URL hai).",
+        "width": 520,
+        "height": 200
+      },
+      "id": "6f4ca0d9-dd26-475c-9aa3-b9bfa5aeea92",
+      "name": "Note da4a",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -620
+      ]
+    }
+  ],
+  "connections": {
+    "Apollo phone webhook": {
+      "main": [
+        [
+          {
+            "node": "Read phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read phone": {
+      "main": [
+        [
+          {
+            "node": "ServiceNow sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salesforce sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Workday sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Custom sheet row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ServiceNow Mongo row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI_ML Mongo row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salesforce Mongo row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Workday Mongo row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Custom Mongo row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update ServiceNow rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update AI_ML rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salesforce sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update Salesforce rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workday sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update Workday rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Custom sheet row": {
+      "main": [
+        [
+          {
+            "node": "Update Custom rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceNow Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to ServiceNow MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI_ML Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to AI/ML MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salesforce Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to Salesforce MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workday Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to Workday MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Custom Mongo row": {
+      "main": [
+        [
+          {
+            "node": "Save to added pools MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "tags": []
+}

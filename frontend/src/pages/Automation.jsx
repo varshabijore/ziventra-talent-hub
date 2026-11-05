@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ErrorBox, Icon, Kpi, Loading, fmt } from "../components/ui.jsx";
+import { ErrorBox, Icon, Kpi, Loading, Modal, fmt } from "../components/ui.jsx";
 import { qs } from "../api.js";
 import { useCached } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import Contacts from "./Contacts.jsx";
-// compact pool split for the KPI card: one thin bar + one line of coloured numbers (hover shows the pool name)
 const POOL_C = { ServiceNow: "var(--sn)", "AI/ML": "var(--ai)", Salesforce: "var(--sf)", Workday: "var(--wd)" };
 const EXTRA_C = ["#0ea5e9", "#f59e0b", "#ec4899", "#14b8a6", "#8b5cf6", "#64748b"];
 // [pool name, count, colour] for every pool that found someone (zeros hidden); pools added on the website by name
@@ -21,21 +20,28 @@ const shortPool = (p, max = 18) => {
   const s = p.replace(/\s+(developer|architect|engineer|consultant|specialist|analyst|administrator)s?$/i, "");
   return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 };
-function PoolSplit({ x }) {
+// "120 SAP Ariba Buying & Invoicing, 14 united states and 18 more pools"
+// small popup from the "Scraped (new)" card: every pool with its new candidates, biggest first
+function PoolPopup({ x, range, onClose }) {
   const parts = poolParts(x);
   const total = parts.reduce((a, [, n]) => a + n, 0);
-  if (!total) return <>no new candidates</>;
-  const label = parts.map(([p, n]) => `${n} ${p}`).join(", ");
-  const top = parts.slice(0, 3), more = parts.length - top.length;
+  const max = parts[0]?.[1] || 1;
   return (
-    <span className="psplit" title={label} aria-label={label}>
-      <span className="pbar">{parts.map(([p, n, c]) => <i key={p} style={{ width: (100 * n) / total + "%", background: c }} />)}</span>
-      <span className="pnums">{top.map(([p, n, c]) => <span key={p} title={`${n} ${p}`}><b style={{ background: c }} />{shortPool(p, 12)} {fmt(n)}</span>)}
-        {more > 0 && <span className="muted" title={parts.slice(3).map(([p, n]) => `${n} ${p}`).join(", ")}>+{more} more pools</span>}</span>
-    </span>
+    <Modal onClose={onClose}>
+      <h2>New candidates per pool</h2>
+      <p className="muted small" style={{ margin: "0 0 12px" }}>{fmt(total)} new {range === "today" ? "today" : "on " + range} · {parts.length} pools</p>
+      <div className="ppop">{parts.map(([p, n]) => (
+        <a key={p} href={"/candidates?pool=" + encodeURIComponent(p)}>
+          <span className="pn" title={p}>{p}</span>
+          <span className="cbar"><i style={{ width: Math.max(3, (100 * n) / max) + "%" }} /></span>
+          <b className="mono">{fmt(n)}</b>
+        </a>))}
+        {!parts.length && <div className="small muted">No new candidates.</div>}</div>
+      <div className="actions"><button type="button" className="btn" onClick={onClose}>Close</button></div>
+    </Modal>
   );
 }
-// "120 SAP Ariba Buying & Invoicing, 14 united states and 18 more pools"
+
 const split = (x, sep = ", ", max = 3) => {
   const parts = poolParts(x);
   if (!parts.length) return "none";
@@ -107,6 +113,7 @@ export default function Automation({ query }) {
   const [job, setJob] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [page, setPage] = useState(0);
+  const [poolPop, setPoolPop] = useState(false);   // popup: new candidates per pool
   const PER = 10;
 
   useEffect(() => setPage(0), [job, onlyIssues, from, to]);
@@ -146,13 +153,16 @@ export default function Automation({ query }) {
 
       <section className="kpis">
         <Kpi icon="bolt" bg="var(--brand-soft)" fg="var(--brand)" label="Runs" value={fmt(w.runs)} sub={single ? "workflow runs that day" : `in ${d.days} days`} />
-        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} sub={<PoolSplit x={w} />} />
+        <Kpi icon="users" bg="var(--brand-soft)" fg="var(--brand)" label="Scraped (new)" value={fmt(w.new)} onClick={() => setPoolPop(true)}
+          sub={(() => { const n = poolParts(w).length; return n ? <>{n} pool{n === 1 ? "" : "s"} · <span className="linky">see all</span></> : "no new candidates"; })()} />
         <Kpi icon="spark" bg="var(--sn-soft)" fg="var(--sn)" label="Enriched" value={fmt(w.enriched)} sub={`${w.emails_valid} with a valid email`} />
         <Kpi icon="refresh" bg="var(--info-soft)" fg="var(--info)" label="Refreshed" value={fmt(w.checked)} sub={`${w.changed} LinkedIn changes`} />
         <Kpi icon="star" bg="var(--warn-soft)" fg="var(--warn)" label="Apify cost" value={money(w.cost)} sub={`${w.dup_rate}% of scraped results were duplicates`} />
         <Kpi icon="x" bg={w.issues ? "var(--bad-soft, rgba(220,38,38,.12))" : "var(--good-soft, rgba(22,163,74,.1))"} fg={w.issues ? "var(--bad)" : "var(--good)"}
           label="Issues" value={fmt(w.issues)} sub={w.issues ? "see the Issues list" : "everything ran fine"} />
       </section>
+
+      {poolPop && <PoolPopup x={w} range={range} onClose={() => setPoolPop(false)} />}
 
       <section className="jobs">{d.jobs.map((j) => <JobCard key={j.job} j={j} single={single} />)}</section>
 
