@@ -250,10 +250,11 @@ def report(runs_raw, errors_raw, start, end):
         for job in SHOWN_JOBS:
             if job not in logged_jobs:
                 continue
+            first = min(r["run_at"] for r in allruns if r["job"] == job)   # a new workflow is not "missed" before its first run
             for t in SCHEDULE[job]:
                 h, m = map(int, t.split(":"))
                 at = now.replace(hour=h, minute=m, second=0, microsecond=0)
-                if at + dt.timedelta(minutes=45) > now:
+                if at + dt.timedelta(minutes=45) > now or at.strftime("%Y-%m-%d %H:%M") < first:
                     continue
                 near = [r for r in allruns if r["job"] == job and r["date"] == today and
                         abs((dt.datetime.strptime(r["run_at"], "%Y-%m-%d %H:%M").replace(tzinfo=IST) - at).total_seconds()) <= 75 * 60]
