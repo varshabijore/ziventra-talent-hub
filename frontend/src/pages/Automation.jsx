@@ -37,7 +37,6 @@ function PoolPopup({ x, range, onClose }) {
           <b className="mono">{fmt(n)}</b>
         </a>))}
         {!parts.length && <div className="small muted">No new candidates.</div>}</div>
-      <div className="actions"><button type="button" className="btn" onClick={onClose}>Close</button></div>
     </Modal>
   );
 }

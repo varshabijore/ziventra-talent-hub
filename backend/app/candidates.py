@@ -782,14 +782,16 @@ class Candidates:
         week = last14[-7]
         table = {}
         for v in views:
-            r = table.setdefault(v["pool"], {"pool": v["pool"], "total": 0, "today": 0, "week": 0, "enriched": 0, "email": 0, "phone": 0})
+            r = table.setdefault(v["pool"], {"pool": v["pool"], "total": 0, "today": 0, "week": 0, "enriched": 0, "email": 0, "phone": 0, "contact": 0})
             f = str(v.get("first_seen") or "")[:10]
             r["total"] += 1
             r["today"] += f == t
             r["week"] += f >= week
             r["enriched"] += v["data_status"] in ("Enriched", "Refreshed")
-            r["email"] += scoring.has_value("email", v.get("email"))
-            r["phone"] += bool(v.get("phone"))
+            em, ph = bool(scoring.has_value("email", v.get("email"))), bool(scoring.has_value("phone", v.get("phone")))
+            r["email"] += em
+            r["phone"] += ph
+            r["contact"] += em or ph
         pool_table = sorted(table.values(), key=lambda r: -r["total"])
         # countries (data now comes from many countries), each with its 3 biggest cities
         cn = {}
@@ -819,6 +821,8 @@ class Candidates:
             "data_status": by("data_status", DATA_STATUS),
             "cities": self._top(views, "city", 7),
             "trend": trend,
+            "week": sum(r["found"] for r in trend[-7:]),
+            "contactable": sum(r["contact"] for r in pool_table),
             "pool_table": pool_table,
             "countries": countries,
             "experience": {b: sum(1 for v in views if (v.get("experience_bucket") or "Unknown") == b) for b in ("0-2", "2-5", "5-8", "8+", "Unknown")},

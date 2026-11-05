@@ -992,3 +992,57 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 }
 .dash>.grid3.drow>.panel{min-height:300px}
 .ctry{flex:1;min-height:0;overflow-y:auto}
+
+/* ===== dashboard v8: easy to read, scrolls normally ===== */
+.dash.dash2{height:auto !important}
+.dash2 .r1>.panel{height:340px;display:flex;flex-direction:column}
+.dash2 .r1 .span2>div:first-of-type{flex:1;display:flex;align-items:flex-end}
+.dash2 .r2{align-items:start}
+.dash2 .r2>.panel{max-height:640px;display:flex;flex-direction:column}
+.dash2 .r3>.panel{height:400px;display:flex;flex-direction:column}
+.dash2 .sub{margin:2px 0 12px}
+.phead2{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.phead2 .sub{margin-bottom:8px}
+.phead2 input{width:190px;padding:7px 10px}
+/* pipeline funnel */
+.funnel{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center}
+.funnel a{color:var(--ink);text-decoration:none;display:block;padding:2px 4px;border-radius:8px}
+.funnel a:hover{background:var(--soft)}
+.ftop{display:flex;justify-content:space-between;font-size:13.5px;font-weight:500}
+.ftop b{font-size:15px}
+.fbar{height:10px;border-radius:6px;background:var(--soft);overflow:hidden;margin:5px 0 3px}
+.fbar i{display:block;height:100%;border-radius:6px}
+/* pools table */
+.pools2 .ptabs{margin:2px 0 10px;align-self:flex-start}
+.pools2 .ptabs button{padding:6px 12px;font-size:12.5px}
+.pools2 table th.num,.pools2 table td.num{text-align:right}
+.pools2 td{vertical-align:middle}
+.pools2 .pname{margin-right:8px}
+.pools2 .pct{display:flex;align-items:center;gap:8px;min-width:130px}
+.pools2 .pct .cbar{margin:0}
+.pools2 .viewall{margin-top:10px}
+/* countries */
+.ctry2{display:flex;flex-direction:column;gap:2px}
+.ctry2>a,.ctry2>.crow-other{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(50px,1fr) auto 38px;gap:10px;align-items:center;padding:8px 6px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:13.5px}
+.ctry2>a:hover{background:var(--soft)}
+.ctry2 .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctry2 .cbar{margin:0}
+.ctry2 .small{text-align:right}
+/* X button on every popup */
+.modal{position:relative}
+.mclose{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--muted);display:grid;place-items:center;cursor:pointer;z-index:2}
+.mclose:hover{color:var(--ink);border-color:var(--ink)}
+.modal>h2{padding-right:40px}
+@media (max-width:1100px){
+  .dash2 .r1>.panel,.dash2 .r3>.panel{height:auto}
+  .dash2 .r1 .span2>div:first-of-type{display:block}
+}
+.dash2 .r1>.panel{height:370px}
+.dash2 .r1 .span2>div:first-of-type{align-items:center}
+.funnel{gap:10px}
+.dash2 .r1 .span2>div:first-of-type{align-items:flex-end}
+@media (max-width:1100px){
+  .dash2 .r1>.panel,.dash2 .r3>.panel{height:auto}
+  .dash2 .r1 .span2>div:first-of-type{display:block}
+  .dash2 .r3>.panel{min-height:0}
+}

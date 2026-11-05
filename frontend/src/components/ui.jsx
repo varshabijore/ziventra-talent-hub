@@ -141,7 +141,8 @@ export function Modal({ onClose, children, wide }) {
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [onClose]);
-  return <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true">{children}</div></div>;
+  return <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true">
+    <button type="button" className="mclose" onClick={onClose} aria-label="Close"><Icon name="x" size={16} /></button>{children}</div></div>;
 }
 
 // ---------- charts ----------
