@@ -12,9 +12,10 @@ import Candidate from "./pages/Candidate.jsx";
 import Daily from "./pages/Daily.jsx";
 import Automation from "./pages/Automation.jsx";
 import NewCandidate from "./pages/NewCandidate.jsx";
+import LinkedIn from "./pages/LinkedIn.jsx";
 
-const NAV = [["dashboard", "Dashboard", "home"], ["candidates", "Candidates", "users"], ["daily", "Daily record", "cal"], ["automation", "Automation", "bolt"]];
-const TITLES = { dashboard: "Dashboard", candidates: "Candidates", candidate: "Candidate", daily: "Daily record", automation: "Automation", login: "Sign in" };
+const NAV = [["dashboard", "Dashboard", "home"], ["candidates", "Candidates", "users"], ["daily", "Daily record", "cal"], ["automation", "Automation", "bolt"], ["linkedin", "LinkedIn", "link"]];
+const TITLES = { dashboard: "Dashboard", candidates: "Candidates", candidate: "Candidate", daily: "Daily record", automation: "Automation", linkedin: "LinkedIn", login: "Sign in" };
 
 function currentTheme() {
   return document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -181,6 +182,7 @@ function Routes() {
     candidate: route.id === "new" ? <NewCandidate /> : <Candidate id={route.id} query={route.query} />,
     daily: <Daily query={route.query} />,
     automation: <Automation query={route.query} />,
+    linkedin: <LinkedIn />,
   }[route.name];
   return <Shell route={route}>{page || <NotFound signedIn />}</Shell>;
 }

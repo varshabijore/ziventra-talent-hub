@@ -94,6 +94,11 @@ class MongoStore:
     def errors_since(self, day):
         return [{k: v for k, v in d.items() if k != "_id"} for d in self.db.n8n_errors.find({"at": {"$gte": day}}).limit(500)]
 
+    # LinkedIn accounts page: kind = "accounts" | "runs" (collections li_accounts / li_runs, talent_app)
+    def li_list(self, kind): return [{k: v for k, v in d.items() if k != "_id"} for d in self.db["li_" + kind].find({}).limit(500)]
+    def li_put(self, kind, doc): self.db["li_" + kind].replace_one({"id": doc["id"]}, dict(doc), upsert=True)
+    def li_del(self, kind, did): self.db["li_" + kind].delete_one({"id": did})
+
     # candidates
     def has_pool(self, pool): return pool in self.cand
     def candidates(self, pool):
@@ -157,6 +162,11 @@ class MemoryStore:
     def runs_on(self, day): return copy.deepcopy([r for r in self._runs if (r.get("date") or str(r.get("run_at", ""))[:10]) == day])
     def runs_since(self, day): return copy.deepcopy([r for r in self._runs if (r.get("date") or str(r.get("run_at", ""))[:10]) >= day])
     def errors_since(self, day): return copy.deepcopy([e for e in getattr(self, "_errors", []) if str(e.get("at", "")) >= day])
+
+    def li_list(self, kind): return copy.deepcopy(list(getattr(self, "_li", {}).get(kind, {}).values()))
+    def li_put(self, kind, doc):
+        self._li = getattr(self, "_li", {}); self._li.setdefault(kind, {})[doc["id"]] = copy.deepcopy(doc)
+    def li_del(self, kind, did): getattr(self, "_li", {}).get(kind, {}).pop(did, None)
 
     def has_pool(self, pool): return pool in self._cand
     def candidates(self, pool): return copy.deepcopy(list(self._cand[pool].values()))

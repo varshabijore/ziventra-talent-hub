@@ -15,6 +15,7 @@ from starlette.routing import Route
 from . import config, scoring, security
 from .candidates import Candidates, today_ist
 from . import automation, transfer
+from .linkedin import LinkedInService
 from .store import make_store, now
 
 EMAIL_RX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -223,6 +224,39 @@ async def candidates(request):
     return ok(await run_in_threadpool(lambda: c.memo("search", p, lambda: c.search(p, u["id"]))))
 
 
+async def linkedin_page(request):
+    """LinkedIn accounts page (trial). GET: accounts (no cookies) + runs; finished runs are imported on each call."""
+    u = current_user(request, "recruiter")
+    return ok(await run_in_threadpool(S["li"].page, u))
+
+
+async def linkedin_accounts(request):
+    """POST {label, cookie, user_agent, daily_limit}: connect. DELETE /api/linkedin/accounts/{aid}: disconnect (cookie deleted)."""
+    u = current_user(request, "admin")
+    if request.method == "DELETE":
+        return ok(await run_in_threadpool(S["li"].disconnect, request.path_params.get("aid", "")))
+    try:
+        d = await request.json() or {}
+    except Exception:
+        raise HTTPException(400, "Send JSON")
+    r = await run_in_threadpool(S["li"].connect, d.get("label"), d.get("cookie"), d.get("user_agent"), d.get("daily_limit"), u)
+    return err(400, r["error"]) if r.get("error") else ok(r)
+
+
+async def linkedin_runs(request):
+    """POST {account_id, pool, search_url, count}: start a LinkedIn people search run on Apify."""
+    u = current_user(request, "recruiter")
+    try:
+        d = await request.json() or {}
+    except Exception:
+        raise HTTPException(400, "Send JSON")
+    r = await run_in_threadpool(S["li"].start, d.get("account_id"), d.get("pool"), d.get("search_url"), d.get("count"), u)
+    if r.get("error"):
+        return err(400, r["error"])
+    S["cand"].invalidate()
+    return ok(r)
+
+
 async def options(request):
     """GET: options added on the website. POST {action: add|remove, kind: pool|role|country|city|skill|module, name, desc?, parent?}
     (parent = the country of a city, or the pool of a skill / module)."""
@@ -407,6 +441,7 @@ async def health(request):
 async def lifespan(app):
     st = make_store()
     S["store"], S["cand"] = st, Candidates(st)
+    S["li"] = LinkedInService(st, S["cand"])
     S["cand"].warm()  # load candidates in the background right away
     if config.ADMIN_EMAIL and config.ADMIN_PASSWORD and not st.user_by_email(config.ADMIN_EMAIL):
         st.user_insert({"name": config.ADMIN_NAME, "email": config.ADMIN_EMAIL, "password_hash": security.hash_password(config.ADMIN_PASSWORD),
@@ -439,6 +474,10 @@ routes = [
     Route("/api/contacts", contacts_page),
     Route("/api/search", smart_search),
     Route("/api/options", options, methods=["GET", "POST"]),
+    Route("/api/linkedin", linkedin_page),
+    Route("/api/linkedin/accounts", linkedin_accounts, methods=["POST"]),
+    Route("/api/linkedin/accounts/{aid}", linkedin_accounts, methods=["DELETE"]),
+    Route("/api/linkedin/runs", linkedin_runs, methods=["POST"]),
     Route("/api/candidates", candidates, methods=["GET", "POST"]),
     Route("/api/candidates/delete", delete_candidates, methods=["POST"]),
     Route("/api/candidates/export", export, methods=["GET", "POST"]),

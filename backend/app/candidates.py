@@ -513,7 +513,7 @@ class Candidates:
         return r
 
     # ---------- import (CSV / Excel) ----------
-    def import_rows(self, rows, mapping, default_pool, mode, user, commit=False):
+    def import_rows(self, rows, mapping, default_pool, mode, user, commit=False, source=None):
         """mode: 'fill' = add only empty fields of existing candidates, 'overwrite' = replace them, 'skip' = leave them.
         Returns counts, row errors and a short preview; with commit=True it also saves."""
         docs = self.docs()
@@ -584,7 +584,7 @@ class Candidates:
             pool_key = self.pool_key(data["pool"])
             manual = {k: v for k, v in data.items() if k in allowed or k == "name"}
             doc = {"pool": data["pool"], "name": data["name"], "linkedin_url": data["linkedin_url"], "readiness": "Discovered",
-                   "source": "Imported file", "source_flow": "import (website)", "first_seen": day, "last_updated": day,
+                   "source": source or "Imported file", "source_flow": "website" if source else "import (website)", "first_seen": day, "last_updated": day,
                    "manual": manual, "app_updated_at": stamp, "app_updated_by": user["name"], "app_updated_by_id": user["id"]}
             new_id = self.store.candidate_insert(pool_key, doc)
             self.store.audit_add({"cand": f"{pool_key}:{new_id}", "at": stamp, "by": user["id"], "by_name": user["name"], "field": "*",

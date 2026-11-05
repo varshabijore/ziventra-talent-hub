@@ -1050,3 +1050,17 @@ main>form>.phead,main>form>.top{padding-right:56px;min-height:40px}
 .jobs:not(.two){grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:1250px){.jobs:not(.two){grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:760px){.jobs:not(.two){grid-template-columns:minmax(0,1fr)}}
+
+/* LinkedIn accounts page (trial) */
+.liwrap{align-items:start}
+.liacc{display:flex;flex-direction:column;gap:8px}
+.liacc1{border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.liacc1.on{border-color:var(--brand);background:var(--brand-soft)}
+.lihead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.liacc1 .linkbtn{align-self:flex-start;margin-top:2px}
+.lirow{display:grid;grid-template-columns:1fr 1.4fr 120px;gap:10px}
+.litrim{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.listeps{margin:0 0 12px;padding-left:20px;font-size:13px;line-height:1.7}
+@media (max-width:760px){.lirow{grid-template-columns:1fr}}
+.nowrap{white-space:nowrap}
+.litrim{max-width:300px}
