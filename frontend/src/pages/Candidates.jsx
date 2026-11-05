@@ -7,7 +7,7 @@ import { useCached, useData } from "../context/DataContext.jsx";
 import { go } from "../router.js";
 import { POOL_NAMES } from "../pools.js";
 
-const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", skill: "", module: "", bucket: "", data_status: "", min_score: "", updated_within: "", first_seen: "", min_exp: "", max_exp: "",
+const DEFAULT = { q: "", pool: "", country: "", city: "", role: "", skill: "", module: "", bucket: "", data_status: "", origin: "", min_score: "", updated_within: "", first_seen: "", min_exp: "", max_exp: "",
   open_to_work: false, certified: false, has_email: false, has_phone: false, in_role: false, sort: "updated", dir: "desc", page: 1 };
 // filters can come in the address (from the Dashboard smart search): /candidates?pool=Salesforce&city=Pune&has_email=1
 const fromQuery = (query) => {
@@ -125,7 +125,7 @@ export default function Candidates({ query }) {
       <option value="">{label}</option>{opts.map((o) => { const v = o.v ?? o; return <option key={v} value={v}>{o.l ?? o}</option>; })}
     </select>
   );
-  const LBL = { role: (v) => v, skill: (v) => "Skill: " + v, module: (v) => "Module: " + v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v,
+  const LBL = { role: (v) => v, skill: (v) => "Skill: " + v, module: (v) => "Module: " + v, bucket: (v) => (v === "Unknown" ? "Exp unknown" : v + " yrs exp"), data_status: (v) => v, origin: (v) => "From " + v,
     min_score: (v) => v + "%+ complete", min_exp: (v) => v + "+ yrs exp", max_exp: (v) => "up to " + v + " yrs", updated_within: (v) => (v === "1" ? "Updated today" : `Updated in ${v} days`) };
   const activeChips = [...Object.keys(LBL).filter((k) => F[k]).map((k) => [k, LBL[k](F[k])]), ...CHECKS.filter(([k]) => F[k])];
   const moreCount = activeChips.length;
@@ -184,6 +184,7 @@ export default function Candidates({ query }) {
               <label className="fl">Profile complete<Sel k="min_score" label="Any profile %" opts={[{ v: "90", l: "90%+ complete" }, { v: "70", l: "70%+ complete" }, { v: "50", l: "50%+ complete" }]} /></label>
               <label className="fl">Updated<Sel k="updated_within" label="Any time" opts={[{ v: "1", l: "Updated today" }, { v: "7", l: "Last 7 days" }, { v: "30", l: "Last 30 days" }]} /></label>
               <label className="fl">Skill<Sel k="skill" label="Any skill" opts={F.skill && !(f.skills || []).includes(F.skill) ? [F.skill, ...(f.skills || [])] : (f.skills || [])} /></label>
+              <label className="fl">Source<Sel k="origin" label="All sources" opts={F.origin && !(f.origins || []).some((o) => o.v === F.origin) ? [F.origin, ...(f.origins || [])] : (f.origins || [])} /></label>
               <label className="fl">Module<Sel k="module" label="Any module" opts={F.module && !(f.modules || []).includes(F.module) ? [F.module, ...(f.modules || [])] : (f.modules || [])} /></label>
             </div>
             <div className="fpills"><span className="flabel">Only show</span>

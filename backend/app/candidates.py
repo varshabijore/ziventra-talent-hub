@@ -53,6 +53,24 @@ def fix_date(v):
     return v
 
 
+ORIGINS = ["Google search", "LinkedIn account", "GitHub", "Hugging Face", "arXiv", "Imported file", "Added on website"]
+
+
+def origin_of(v):
+    """Where a candidate came from, in one short word for the Source filter."""
+    s = str(v.get("source") or "").lower()
+    if "linkedin search (account)" in s:
+        return "LinkedIn account"
+    for key, name in (("github", "GitHub"), ("hugging", "Hugging Face"), ("arxiv", "arXiv")):
+        if key in s:
+            return name
+    if "imported file" in s or "import (website)" in str(v.get("source_flow") or "").lower():
+        return "Imported file"
+    if "added on website" in s:
+        return "Added on website"
+    return "Google search"
+
+
 def flow_label(v):
     return FLOW_LABEL.get(str(v or "").strip().lower(), v or "automation")
 
@@ -326,6 +344,7 @@ class Candidates:
                 "certifications", "open_to_work", "data_status", "percent", "updated_at", "updated_by",
                 "first_seen", "source_flow"]
         out = {k: v.get(k) for k in keys}
+        out["origin"] = origin_of(v)
         # contact shown on the card: the candidate's own value, else what Apollo / Treg found (before the next sheet sync)
         email = v.get("email") if scoring.has_value("email", v.get("email")) else \
             next((x for x in (v.get("treg_personal_email"), v.get("treg_work_email"), v.get("apollo_personal_email"), v.get("apollo_email")) if x), "")
@@ -403,6 +422,8 @@ class Candidates:
                 return False
             if p.get("source") and p["source"].lower() not in str(v.get("source_flow") or "").lower():
                 return False
+            if p.get("origin") and origin_of(v) != p["origin"]:
+                return False
             if p.get("first_seen") and str(v.get("first_seen") or "")[:10] != p["first_seen"]:
                 return False
             return True
@@ -433,6 +454,10 @@ class Candidates:
             have = {x.lower() for x in out}
             out += sorted({x["name"] for x in opt[kind] if (not pool or not x.get("pool") or x["pool"] == pool) and x["name"].lower() not in have})
             return out
+        on = {}
+        for v in in_pool:
+            o = origin_of(v); on[o] = on.get(o, 0) + 1
+        origins = [{"v": o, "l": f"{o} ({on[o]:,})"} for o in ORIGINS if on.get(o)]
         stats = {
             "total": len(rows), "pool_total": len(in_pool),
             "in_role": sum(1 for v in rows if v.get("title_match") == "Exact"),
@@ -448,7 +473,7 @@ class Candidates:
                   "skills": top("skills", "skills"), "modules": top("modules_specialization", "modules"),
                   "pools": opt["all_pools"], "roles": sorted(set(cnt("role_category")) | {r["name"] for r in opt["roles"] if not pool or not r["pool"] or r["pool"] == pool}),
                   "buckets": [b for b in ("0-2", "2-5", "5-8", "8+", "Unknown") if any(v.get("experience_bucket") == b for v in in_pool)],
-                  "data_status": DATA_STATUS}
+                  "data_status": DATA_STATUS, "origins": origins}
         return {"items": [self.light(v) for v in rows[(page - 1) * size: page * size]], "page": page, "size": size,
                 "pages": max(1, -(-len(rows) // size)), "stats": stats, "facets": facets}
 
